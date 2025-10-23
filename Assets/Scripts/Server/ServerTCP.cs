@@ -98,6 +98,6 @@ public class ServerTCP : MonoBehaviour
         listenThread?.Abort();
         clientSocket?.Close();
         serverSocket?.Close();
-        Debug.Log("[SERVER] Servidor cerrado.");
+        Debug.Log("[SERVER] Servidor cerrado.");    
     }
 }
