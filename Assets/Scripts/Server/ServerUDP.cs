@@ -48,6 +48,11 @@ public class ServerUDP : MonoBehaviour
         }
     }
 
+    void Awake()
+    {
+        DontDestroyOnLoad(gameObject);
+    }
+
     void Start()
     {
         StartServer();

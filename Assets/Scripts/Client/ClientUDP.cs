@@ -47,7 +47,10 @@ public class ClientUDP : MonoBehaviour
             return new Vector3(posX, posY, posZ);
         }
     }
-
+    void Awake()
+    {
+        DontDestroyOnLoad(gameObject);
+    }
     void Start()
     {
         StartClient();
