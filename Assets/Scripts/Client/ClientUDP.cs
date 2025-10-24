@@ -51,6 +51,8 @@ public class ClientUDP : MonoBehaviour
     void Start()
     {
         StartClient();
+        if (player == null)
+            player = Instantiate(player, Vector3.zero, Quaternion.identity);
     }
 
     
@@ -116,6 +118,23 @@ public class ClientUDP : MonoBehaviour
 
     private void SendPlayerCommand(string command)
     {
+        if (player == null)
+        {
+            Debug.LogError("[CLIENT UDP] Player is NULL! Assign it in the Inspector.");
+            return;
+        }
+
+        if (clientSocket == null)
+        {
+            Debug.LogError("[CLIENT UDP] Client socket is NULL! Did StartClient() fail?");
+            return;
+        }
+
+        if (serverEP == null)
+        {
+            Debug.LogError("[CLIENT UDP] Server endpoint is NULL!");
+            return;
+        }
         try
         {
             PlayerData data = new PlayerData

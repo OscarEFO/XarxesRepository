@@ -17,7 +17,7 @@ public class ServerUDP : MonoBehaviour
     public int port = 9050;
 
     [Header("Scene Objects")]
-    public GameObject playerPrefab;
+    public GameObject player;
     public GameObject serverObject;
 
     private GameObject playerInstance;
@@ -78,7 +78,7 @@ public class ServerUDP : MonoBehaviour
             Debug.Log($"[SERVER UDP] Escuchando en puerto {port}...");
             isRunning = true;
 
-            playerInstance = Instantiate(playerPrefab, Vector3.zero, Quaternion.identity);
+            playerInstance = Instantiate(player, Vector3.zero, Quaternion.identity);
 
             // Iniciar hilo para escuchar mensajes
             receiveThread = new Thread(ReceiveLoop);
