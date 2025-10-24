@@ -1500,7 +1500,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &980084496
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2001,6 +2001,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8883f20cb63c0eb43a715f8f0d800889, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SceneManagerUI
+  player: {fileID: 7374805618255991071, guid: df4df23c9f1be8c4cb98b6e12ef53c01, type: 3}
+  serverObject: {fileID: 1531146927447266280, guid: 09fc64dcea1030a42b9bb606fd69d5bd, type: 3}
 --- !u!4 &1532425963
 Transform:
   m_ObjectHideFlags: 0

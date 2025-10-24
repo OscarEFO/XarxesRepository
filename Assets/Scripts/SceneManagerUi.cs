@@ -3,6 +3,8 @@ using UnityEngine.SceneManagement;
 
 public class SceneManagerUI : MonoBehaviour
 {
+    public GameObject player;
+    public GameObject serverObject;
     public void StartServerTCP()
     {
         GameObject go = new GameObject("ServerTCP");
@@ -12,19 +14,25 @@ public class SceneManagerUI : MonoBehaviour
     public void StartServerUDP()
     {
         GameObject go = new GameObject("ServerUDP");
-        go.AddComponent<ServerUDP>();
+        var server = go.AddComponent<ServerUDP>();
+
+        server.player = player;
+        server.serverObject = serverObject;
     }
 
     public void StartClientTCP()
     {
         GameObject go = new GameObject("ClientTCP");
-        go.AddComponent<ClientTCP>();
+        go.AddComponent<ClientTCP>(); 
     }
 
     public void StartClientUDP()
     {
         GameObject go = new GameObject("ClientUDP");
-        go.AddComponent<ClientUDP>();
+        var client = go.AddComponent<ClientUDP>();
+
+        client.player = player;
+        client.serverObject = serverObject;
     }
 
     public void SwitchScene()
