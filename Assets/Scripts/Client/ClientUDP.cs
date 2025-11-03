@@ -23,6 +23,7 @@ public class ClientUDP : MonoBehaviour
     public GameObject serverObject;
 
     private Vector3 serverObjectTargetPos = Vector3.zero;
+    private string clientId;
 
     public class PlayerData
     {
@@ -54,8 +55,14 @@ public class ClientUDP : MonoBehaviour
     void Start()
     {
         StartClient();
+        clientId = Guid.NewGuid().ToString();
+
         if (player == null)
-            player = Instantiate(player, Vector3.zero, Quaternion.identity);
+        {
+            Debug.LogWarning("[CLIENT UDP] No hay player asignado, creando uno.");
+            player = new GameObject("ClientPlayer");
+            player.transform.position = Vector3.zero;
+        }
     }
 
     
@@ -146,11 +153,15 @@ public class ClientUDP : MonoBehaviour
                 command = command
             };
             data.SetPosition(player.transform.position);
+            Debug.Log($"[CLIENT UDP] Sending {command} | Pos: {player.transform.position}");
+
 
             string json = JsonConvert.SerializeObject(data);
             byte[] bytes = Encoding.UTF8.GetBytes(json);
 
             clientSocket.SendTo(bytes, bytes.Length, SocketFlags.None, serverEP);
+            Debug.Log($"[CLIENT UDP] Sent: {command}");
+
         }
         catch (Exception e)
         {
@@ -160,7 +171,7 @@ public class ClientUDP : MonoBehaviour
 
     private void ReceiveLoop()
     {
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[2048];
         EndPoint remote = new IPEndPoint(IPAddress.Any, 0);
 
         while (isRunning)
@@ -168,23 +179,42 @@ public class ClientUDP : MonoBehaviour
             try
             {
                 int received = clientSocket.ReceiveFrom(buffer, ref remote);
-                string message = Encoding.ASCII.GetString(buffer, 0, received);
-                 try
+                string message = Encoding.UTF8.GetString(buffer, 0, received);
+
+                try
                 {
                     ServerObjectData serverData = JsonConvert.DeserializeObject<ServerObjectData>(message);
-                    serverObjectTargetPos = serverData.GetPosition();
+                    if (serverData != null)
+                    {
+                        Vector3 newServerPos = serverData.GetPosition();
+                        serverObjectTargetPos = newServerPos;
+                        continue; 
+                    }
                 }
-                catch
+                catch { }
+
+                try
                 {
-                    Debug.Log("[CLIENT UDP] Recibido: " + message);
+                    PlayerData playerData = JsonConvert.DeserializeObject<PlayerData>(message);
+                    if (playerData != null && playerData.id == "Player1")
+                    {
+                        Vector3 newPos = new Vector3(playerData.posX, playerData.posY, playerData.posZ);
+                        player.transform.position = Vector3.Lerp(player.transform.position, newPos, 0.5f);
+                        Debug.Log($"[CLIENT UDP] Updated player position from server: {newPos}");
+                        continue;
+                    }
                 }
+                catch { }
+
+                Debug.Log($"[CLIENT UDP] Unrecognized message: {message}");
             }
             catch (Exception e)
             {
-                Debug.LogWarning("[CLIENT UDP] Error en recepci�n: " + e.Message);
+                Debug.LogWarning("[CLIENT UDP] Error en recepción: " + e.Message);
             }
         }
     }
+
 
     void OnApplicationQuit()
     {

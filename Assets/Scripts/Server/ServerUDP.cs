@@ -3,11 +3,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Collections.Generic;
 using UnityEngine;
 using Newtonsoft.Json;
 
 public class ServerUDP : MonoBehaviour
 {
+    private readonly Queue<Action> mainThreadActions = new Queue<Action>();
     private Socket serverSocket;
     private EndPoint remoteEP;
     private Thread receiveThread;
@@ -20,7 +22,9 @@ public class ServerUDP : MonoBehaviour
     public GameObject player;
     public GameObject serverObject;
 
-    private GameObject playerInstance;
+    private readonly Dictionary<string, GameObject> playerInstances = new Dictionary<string, GameObject>();
+    private readonly Dictionary<string, EndPoint> clientEndpoints = new Dictionary<string, EndPoint>();
+
 
     public class PlayerData
     {
@@ -58,17 +62,29 @@ public class ServerUDP : MonoBehaviour
         StartServer();
     }
 
- void Update()
+void Update()
+{
+    while (mainThreadActions.Count > 0)
     {
-        if (serverObject != null)
+        Action action = null;
+        lock (mainThreadActions)
         {
-            serverObject.transform.position = new Vector3(
-                Mathf.Sin(Time.time) * 3f,
-                0,
-                Mathf.Cos(Time.time) * 3f
-            );
+            if (mainThreadActions.Count > 0)
+                action = mainThreadActions.Dequeue();
         }
+        action?.Invoke();
     }
+
+    if (serverObject != null)
+    {
+        serverObject.transform.position = new Vector3(
+            Mathf.Sin(Time.time) * 3f,
+            0,
+            Mathf.Cos(Time.time) * 3f
+        );
+    }
+}
+
 
     void StartServer()
     {
@@ -83,8 +99,6 @@ public class ServerUDP : MonoBehaviour
             Debug.Log($"[SERVER UDP] Escuchando en puerto {port}...");
             isRunning = true;
 
-            playerInstance = Instantiate(player, Vector3.zero, Quaternion.identity);
-
             // Iniciar hilo para escuchar mensajes
             receiveThread = new Thread(ReceiveLoop);
             receiveThread.Start();
@@ -95,62 +109,70 @@ public class ServerUDP : MonoBehaviour
         }
     }
 
-    void ReceiveLoop()
+   private void ReceiveLoop()
     {
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[2048];
 
         while (isRunning)
         {
             try
             {
-                // Recibir datos de cualquier cliente
                 EndPoint clientEP = new IPEndPoint(IPAddress.Any, 0);
                 int received = serverSocket.ReceiveFrom(buffer, ref clientEP);
+                string message = Encoding.UTF8.GetString(buffer, 0, received);
 
-                string message = Encoding.ASCII.GetString(buffer, 0, received);
-                Debug.Log($"[SERVER UDP] Mensaje recibido de {clientEP}: {message}");
+                Debug.Log($"[SERVER UDP] Received from {clientEP}: {message}");
 
-                // Guardamos el �ltimo cliente para responderle
-                remoteEP = clientEP;
-
-                // Enviar "ping" de respuesta 
-                /*
-                byte[] data = Encoding.ASCII.GetBytes("ping");
-                serverSocket.SendTo(data, data.Length, SocketFlags.None, remoteEP);
-                Debug.Log($"[SERVER UDP] Enviado 'ping' a {clientEP}");*/
-                PlayerData data = null;
+                PlayerData playerData = null;
                 try
                 {
-                    data = JsonConvert.DeserializeObject<PlayerData>(message);
+                    playerData = JsonConvert.DeserializeObject<PlayerData>(message);
                 }
-           
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[SERVER UDP] Error en el JSON del cliente: {ex.Message}");
-            }
-             if (data != null)
+                catch (Exception ex)
                 {
-                    ProcessPlayerInput(data);
+                    Debug.LogWarning($"[SERVER UDP] Invalid JSON from {clientEP}: {ex.Message}");
+                }
+
+                if (playerData != null)
+                {
+                    lock (playerInstances)
+                    {
+                        ProcessPlayerInput(playerData, clientEP);
+                    }
+
                     SendServerObjectToClient(clientEP);
                 }
                 else
                 {
-                    // Optional: respond to initial handshake
                     byte[] response = Encoding.UTF8.GetBytes("pong");
                     serverSocket.SendTo(response, response.Length, SocketFlags.None, clientEP);
-                }                
+                    Debug.Log($"[SERVER UDP] Sent handshake to {clientEP}");
+                }
             }
-
-            catch (Exception e)
+            catch (SocketException ex)
             {
-                Debug.LogWarning($"[SERVER UDP] Error en recepci�n: {e.Message}");
+                Debug.LogWarning($"[SERVER UDP] Socket error: {ex.Message}");
             }
-        }   
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[SERVER UDP] Receive loop error: {ex.Message}");
+            }
+        }
     }
 
-    void ProcessPlayerInput(PlayerData data)
+    private void ProcessPlayerInput(PlayerData data, EndPoint clientEP)
     {
-        if (playerInstance == null) return;
+        if (data == null || string.IsNullOrEmpty(data.id)) return;
+
+        if (!playerInstances.ContainsKey(data.id))
+        {
+            GameObject newPlayer = Instantiate(player, Vector3.zero, Quaternion.identity);
+            playerInstances[data.id] = newPlayer;
+            clientEndpoints[data.id] = clientEP;
+            Debug.Log($"[SERVER UDP] New player registered: {data.id} from {clientEP}");
+        }
+
+       // GameObject playerObj = playerInstances[data.id];
 
         Vector3 movement = Vector3.zero;
         switch (data.command)
@@ -161,13 +183,22 @@ public class ServerUDP : MonoBehaviour
             case "D": movement = Vector3.right; break;
         }
 
-        // Move player's representation on the server
-        playerInstance.transform.position += movement * Time.deltaTime * 5f;
+        //playerObj.transform.position += movement * Time.deltaTime * 5f;
+        mainThreadActions.Enqueue(() =>
+        {
+            GameObject playerObj = playerInstances[data.id];
+            playerObj.transform.position += movement * 0.1f;
+
+            Debug.Log($"[SERVER UDP] Player {data.id} moved {data.command} to {playerObj.transform.position}");
+
+            SendPlayerPositionToClient(data.id, clientEP);
+        });
+
     }
 
     void SendServerObjectToClient(EndPoint clientEP)
     {
-        if (serverObject == null) return;
+        if (serverObject == null || clientEP == null) return;
 
         try
         {
@@ -178,12 +209,39 @@ public class ServerUDP : MonoBehaviour
             byte[] data = Encoding.UTF8.GetBytes(json);
 
             serverSocket.SendTo(data, data.Length, SocketFlags.None, clientEP);
+            Debug.Log($"[SERVER UDP] Sent object data to {clientEP}: {json}");
         }
         catch (Exception e)
         {
             Debug.LogWarning($"[SERVER UDP] Error sending to client: {e.Message}");
         }
     }
+    private void SendPlayerPositionToClient(string playerId, EndPoint clientEP)
+{
+    if (!playerInstances.ContainsKey(playerId) || clientEP == null) return;
+
+    try
+    {
+        GameObject playerObj = playerInstances[playerId];
+
+        PlayerData data = new PlayerData
+        {
+            id = playerId
+        };
+        data.SetPosition(playerObj.transform.position);
+
+        string json = JsonConvert.SerializeObject(data);
+        byte[] bytes = Encoding.UTF8.GetBytes(json);
+
+        serverSocket.SendTo(bytes, bytes.Length, SocketFlags.None, clientEP);
+
+        Debug.Log($"[SERVER UDP] Sent updated position to {clientEP}: {json}");
+    }
+    catch (Exception e)
+    {
+        Debug.LogWarning($"[SERVER UDP] Error sending player position: {e.Message}");
+    }
+}
 
     void OnApplicationQuit()
     {
