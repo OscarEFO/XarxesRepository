@@ -149,7 +149,7 @@ public class ClientUDP : MonoBehaviour
         {
             PlayerData data = new PlayerData
             {
-                id = "Player1",
+                id = "player",
                 command = command
             };
             data.SetPosition(player.transform.position);
@@ -196,10 +196,10 @@ public class ClientUDP : MonoBehaviour
                 try
                 {
                     PlayerData playerData = JsonConvert.DeserializeObject<PlayerData>(message);
-                    if (playerData != null && playerData.id == "Player1")
+                    if (playerData != null && playerData.id == "player")
                     {
                         Vector3 newPos = new Vector3(playerData.posX, playerData.posY, playerData.posZ);
-                        player.transform.position = Vector3.Lerp(player.transform.position, newPos, 0.5f);
+                        player.transform.position = newPos;
                         Debug.Log($"[CLIENT UDP] Updated player position from server: {newPos}");
                         continue;
                     }

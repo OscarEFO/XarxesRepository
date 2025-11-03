@@ -83,6 +83,11 @@ void Update()
             Mathf.Cos(Time.time) * 3f
         );
     }
+    
+    foreach (var kvp in clientEndpoints)
+    {
+        SendPlayerPositionToClient(kvp.Key, kvp.Value);
+    }
 }
 
 
@@ -172,8 +177,6 @@ void Update()
             Debug.Log($"[SERVER UDP] New player registered: {data.id} from {clientEP}");
         }
 
-       // GameObject playerObj = playerInstances[data.id];
-
         Vector3 movement = Vector3.zero;
         switch (data.command)
         {
@@ -183,18 +186,18 @@ void Update()
             case "D": movement = Vector3.right; break;
         }
 
-        //playerObj.transform.position += movement * Time.deltaTime * 5f;
-        mainThreadActions.Enqueue(() =>
+        // Queue movement on main thread
+        lock (mainThreadActions)
         {
-            GameObject playerObj = playerInstances[data.id];
-            playerObj.transform.position += movement * 0.1f;
-
-            Debug.Log($"[SERVER UDP] Player {data.id} moved {data.command} to {playerObj.transform.position}");
-
-            SendPlayerPositionToClient(data.id, clientEP);
-        });
-
+            mainThreadActions.Enqueue(() =>
+            {
+                GameObject playerObj = playerInstances[data.id];
+                playerObj.transform.position += movement * 0.2f; // Fixed step (not deltaTime)
+                Debug.Log($"[SERVER UDP] Player {data.id} moved {data.command} to {playerObj.transform.position}");
+            });
+        }
     }
+
 
     void SendServerObjectToClient(EndPoint clientEP)
     {
