@@ -3,43 +3,16 @@ using UnityEngine.SceneManagement;
 
 public class SceneManagerUI : MonoBehaviour
 {
-    public GameObject player;
-    public GameObject serverObject;
-    public void StartServerTCP()
+    public void StartAsServer()
     {
-        GameObject go = new GameObject("ServerTCP");
-        go.AddComponent<ServerTCP>();
+        // Cargar escena del servidor
+        SceneManager.LoadScene("Server");
     }
 
-    public void StartServerUDP()
+    public void StartClient()
     {
-        GameObject go = new GameObject("ServerUDP");
-        var server = go.AddComponent<ServerUDP>();
-
-        server.player = player;
-        server.serverObject = serverObject;
-    }
-
-    public void StartClientTCP()
-    {
-        GameObject go = new GameObject("ClientTCP");
-        go.AddComponent<ClientTCP>(); 
-    }
-
-    public void StartClientUDP()
-    {
-        GameObject go = new GameObject("ClientUDP");
-        var client = go.AddComponent<ClientUDP>();
-
-        client.player = player;
-        client.serverObject = serverObject;
-    }
-
-    public void SwitchScene()
-    {
-        string current = SceneManager.GetActiveScene().name;
-        string next = current == "Server" ? "Client" : "Server";
-        SceneManager.LoadScene(next);
+        // Cargar escena del cliente
+        SceneManager.LoadScene("Client");
     }
 
     public void QuitGame()
