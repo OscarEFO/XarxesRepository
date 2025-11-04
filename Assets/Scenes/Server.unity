@@ -1765,7 +1765,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ServerUDP
   port: 9050
-  clientGhost: {fileID: 128579528}
+  ghost: {fileID: 128579528}
 --- !u!4 &1604730398
 Transform:
   m_ObjectHideFlags: 0

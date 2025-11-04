@@ -2419,15 +2419,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -3094214309354950023, guid: df4df23c9f1be8c4cb98b6e12ef53c01, type: 3}
       propertyPath: speed
-      value: 0.1
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6473111029046386392, guid: df4df23c9f1be8c4cb98b6e12ef53c01, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -9
+      value: -0.05
       objectReference: {fileID: 0}
     - target: {fileID: 6473111029046386392, guid: df4df23c9f1be8c4cb98b6e12ef53c01, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -1.02
       objectReference: {fileID: 0}
     - target: {fileID: 6473111029046386392, guid: df4df23c9f1be8c4cb98b6e12ef53c01, type: 3}
       propertyPath: m_LocalPosition.z

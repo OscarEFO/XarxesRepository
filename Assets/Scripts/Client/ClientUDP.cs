@@ -4,13 +4,14 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
-using Newtonsoft.Json;
 using UnityEngine.InputSystem;
+using System.Globalization;
 
 public class ClientUDP : MonoBehaviour
 {
-    private Socket socket;
+    private Socket clientSocket;
     private EndPoint serverEP;
+    private Thread receiveThread;
     private bool running = false;
 
     public string serverIP = "127.0.0.1";
@@ -18,28 +19,12 @@ public class ClientUDP : MonoBehaviour
 
     public GameObject player;
 
-    [System.Serializable]
-    public class PlayerData
-    {
-        public float posX, posY, posZ;
-        public string command;
-
-        public PlayerData(Vector3 pos, string cmd)
-        {
-            posX = pos.x;
-            posY = pos.y;
-            posZ = pos.z;
-            command = cmd;
-        }
-    }
-
     void Start()
     {
         if (player == null)
         {
-            player = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            player.name = "ClientPlayer";
-            player.transform.position = Vector3.zero;
+            Debug.LogError("[CLIENT] No se asignó Player en el inspector!");
+            return;
         }
 
         StartClient();
@@ -47,73 +32,83 @@ public class ClientUDP : MonoBehaviour
 
     void Update()
     {
-        if (!running) return;
+        if (!running || player == null) return;
 
-        string cmd = GetCommand();
-
-        if (cmd != null)
+        if (IsMoving())
         {
-            MovePlayer(cmd); // movimiento local inmediato
-            SendData(cmd);
+            SendPosition();
         }
     }
 
-    string GetCommand()
+    bool IsMoving()
     {
-        var k = Keyboard.current;
-        if (k == null) return null;
+        if (Keyboard.current == null) return false;
 
-        if (k.wKey.isPressed) return "W";
-        if (k.sKey.isPressed) return "S";
-        if (k.aKey.isPressed) return "A";
-        if (k.dKey.isPressed) return "D";
-        return null;
-    }
-
-    void MovePlayer(string cmd)
-    {
-        Vector3 pos = player.transform.position;
-
-        if (cmd == "W") pos += Vector3.up * 0.1f;
-        if (cmd == "S") pos += Vector3.down * 0.1f;
-        if (cmd == "A") pos += Vector3.left * 0.1f;
-        if (cmd == "D") pos += Vector3.right * 0.1f;
-
-        player.transform.position = pos;
+        return
+            Keyboard.current.wKey.isPressed ||
+            Keyboard.current.aKey.isPressed ||
+            Keyboard.current.sKey.isPressed ||
+            Keyboard.current.dKey.isPressed;
     }
 
     void StartClient()
     {
         try
         {
-            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             serverEP = new IPEndPoint(IPAddress.Parse(serverIP), port);
 
             running = true;
+            receiveThread = new Thread(ReceiveLoop);
+            receiveThread.Start();
 
-            Debug.Log("[CLIENT UDP] Cliente iniciado.");
+            Debug.Log("[CLIENT] Cliente UDP iniciado.");
         }
         catch (Exception e)
         {
-            Debug.LogError("[CLIENT UDP] Error: " + e.Message);
+            Debug.LogError("[CLIENT] Error al iniciar: " + e.Message);
         }
     }
 
-    void SendData(string command)
+    void SendPosition()
     {
-        PlayerData data = new PlayerData(player.transform.position, command);
+        Vector3 p = player.transform.position;
 
-        string json = JsonConvert.SerializeObject(data);
-        byte[] bytes = Encoding.UTF8.GetBytes(json);
+        if (float.IsNaN(p.x) || float.IsNaN(p.y))
+            return;
 
-        socket.SendTo(bytes, bytes.Length, SocketFlags.None, serverEP);
+        string json = "{ \"posx\": " + p.x.ToString(CultureInfo.InvariantCulture) +
+                      ", \"posy\": " + p.y.ToString(CultureInfo.InvariantCulture) +
+                      " }";
 
-        Debug.Log("[CLIENT UDP] Enviado JSON: " + json);
+        byte[] data = Encoding.UTF8.GetBytes(json);
+        clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
+
+        Debug.Log("[CLIENT] Enviado: " + json);
+    }
+
+    void ReceiveLoop()
+    {
+        byte[] buffer = new byte[2048];
+        EndPoint remote = new IPEndPoint(IPAddress.Any, 0);
+
+        while (running)
+        {
+            try
+            {
+                int received = clientSocket.ReceiveFrom(buffer, ref remote);
+                string msg = Encoding.UTF8.GetString(buffer, 0, received);
+
+                Debug.Log("[CLIENT] ECO del servidor: " + msg);
+            }
+            catch { }
+        }
     }
 
     void OnApplicationQuit()
     {
         running = false;
-        socket?.Close();
+        receiveThread?.Abort();
+        clientSocket?.Close();
     }
 }

@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
-using Newtonsoft.Json;
 
 public class ServerUDP : MonoBehaviour
 {
@@ -14,45 +13,19 @@ public class ServerUDP : MonoBehaviour
 
     public int port = 9050;
 
-    [Header("Player object controlled by client")]
-    public GameObject clientGhost;
+    public GameObject ghost;
 
-    private Vector3 pendingPosition;
-    private bool hasNewPosition = false;
-
-    [System.Serializable]
-    public class PlayerData
-    {
-        public float posX, posY, posZ;
-        public string command;
-
-        public Vector3 GetPosition()
-        {
-            return new Vector3(posX, posY, posZ);
-        }
-    }
+    private volatile bool hasNewPos = false;
+    private volatile float nx, ny;
 
     void Start()
     {
-        Debug.Log("[SERVER UDP] Inicializando servidor...");
-
-        if (clientGhost == null)
-        {
-            clientGhost = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            clientGhost.name = "ServerGhostPlayer";
-            clientGhost.transform.position = Vector3.zero;
-        }
-
         StartServer();
     }
 
     void Update()
     {
-        if (hasNewPosition)
-        {
-            clientGhost.transform.position = pendingPosition;
-            hasNewPosition = false;
-        }
+        ghost.transform.position = new Vector3(nx, ny, 0f);
     }
 
     void StartServer()
@@ -62,52 +35,92 @@ public class ServerUDP : MonoBehaviour
             serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             serverSocket.Bind(new IPEndPoint(IPAddress.Any, port));
 
-            Debug.Log($"[SERVER UDP] Servidor iniciado en puerto {port}");
-
             running = true;
 
             receiveThread = new Thread(ReceiveLoop);
             receiveThread.Start();
+
+            Debug.Log("[SERVER] Servidor UDP escuchando en puerto " + port);
         }
         catch (Exception e)
         {
-            Debug.LogError("[SERVER UDP] Error al iniciar: " + e.Message);
+            Debug.LogError("[SERVER] Error al iniciar: " + e.Message);
         }
     }
 
     void ReceiveLoop()
     {
-        EndPoint clientEP = new IPEndPoint(IPAddress.Any, 0);
         byte[] buffer = new byte[2048];
+        EndPoint clientEP = new IPEndPoint(IPAddress.Any, 0);
 
         while (running)
         {
             try
             {
                 int received = serverSocket.ReceiveFrom(buffer, ref clientEP);
-                string json = Encoding.UTF8.GetString(buffer, 0, received);
+                string msg = Encoding.UTF8.GetString(buffer, 0, received);
 
-                Debug.Log("[SERVER UDP] Recibido JSON: " + json);
+                //Debug.Log("[SERVER] Recibido: " + msg);
 
-                PlayerData data = JsonConvert.DeserializeObject<PlayerData>(json);
+                if (ParseJSON(msg))
+                    hasNewPos = true;
 
-                if (data != null)
-                {
-                    Vector3 pos = data.GetPosition();
+                Debug.Log("[SERVER] posicion x despues del parse: " + nx + "y: " + ny);
 
-                    Debug.Log($"[SERVER UDP] Posición recibida: {pos}");
+                string response =
+                    "{ \"gx\": " + nx +
+                    ", \"gy\": " + ny + " }";
 
-                    // Guardamos la posición para aplicarla en el hilo principal
-                    pendingPosition = pos;
-                    hasNewPosition = true;
-                }
+                byte[] data = Encoding.UTF8.GetBytes(response);
+                serverSocket.SendTo(data, data.Length, SocketFlags.None, clientEP);
             }
             catch (Exception e)
             {
-                Debug.LogWarning("[SERVER UDP] Error en recepción: " + e.Message);
+                Debug.LogWarning("[SERVER] Error: " + e.Message);
             }
         }
     }
+
+    bool ParseJSON(string json)
+    {
+        try
+        {
+            // Ejemplo: { "posx": 1.52, "posy": -3.4 }
+            // Limpiar bordes
+            json = json.Trim();
+            json = json.TrimStart('{').TrimEnd('}');
+
+            // Separar pares key:value
+            string[] pairs = json.Split(',');
+
+            foreach (string pair in pairs)
+            {
+                string[] kv = pair.Split(':');
+
+                if (kv.Length != 2)
+                    continue;
+
+                string key = kv[0].Trim().Replace("\"", "");
+                string value = kv[1].Trim();
+
+                // Usamos CultureInfo.InvariantCulture para aceptar floats con "." siempre
+                float f = float.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+
+                if (key == "posx")
+                    nx = f;
+                else if (key == "posy")
+                    ny = f;
+            }
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[SERVER] Parse error: " + e.Message + " | JSON: " + json);
+            return false;
+        }
+    }
+
 
     void OnApplicationQuit()
     {

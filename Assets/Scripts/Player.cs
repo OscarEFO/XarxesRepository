@@ -11,8 +11,8 @@ public class PlayerMovement : MonoBehaviour
 
         Vector3 move = Vector3.zero;
 
-        if (Keyboard.current.wKey.isPressed) move += Vector3.forward;
-        if (Keyboard.current.sKey.isPressed) move += Vector3.back;
+        if (Keyboard.current.wKey.isPressed) move += Vector3.up;
+        if (Keyboard.current.sKey.isPressed) move += Vector3.down;
         if (Keyboard.current.aKey.isPressed) move += Vector3.left;
         if (Keyboard.current.dKey.isPressed) move += Vector3.right;
 
