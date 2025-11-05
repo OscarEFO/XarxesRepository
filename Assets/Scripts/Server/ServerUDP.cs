@@ -25,7 +25,11 @@ public class ServerUDP : MonoBehaviour
 
     void Update()
     {
-        ghost.transform.position = new Vector3(nx, ny, 0f);
+        if (hasNewPos)
+        {
+            ghost.transform.position = new Vector3(nx, ny, 0f);
+            hasNewPos = false;
+        }
     }
 
     void StartServer()
