@@ -4,11 +4,12 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using System.Globalization;
 
 public class ClientUDP : MonoBehaviour
 {
+    public static ClientUDP Instance { get; private set; }
+
     private Socket clientSocket;
     private EndPoint serverEP;
     private Thread receiveThread;
@@ -17,76 +18,70 @@ public class ClientUDP : MonoBehaviour
     public string serverIP = "127.0.0.1";
     public int port = 9050;
 
-    public GameObject localPlayer;     // Player del CLIENTE
-    public GameObject remoteServer;    // Player del SERVER en la escena
+    // Estado recibido del servidor (public para lectura por NetworkPlayer)
+    public volatile float server_x, server_y;
+    public volatile float client_x, client_y;
+    public volatile bool hasUpdate = false;
 
-    private volatile float server_x, server_y;
-    private volatile float client_x, client_y;
-
-    private volatile bool hasUpdate = false;
+    void Awake()
+    {
+        // Singleton simple
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
 
     void Start()
     {
-        if (!localPlayer || !remoteServer)
-        {
-            Debug.LogError("[CLIENT] Falta asignar localPlayer o remoteServer!");
-            return;
-        }
-
         StartClient();
     }
 
-
-    void Update()
+    void OnDisable()
     {
-        if (!running) return;
+        OnApplicationQuit();
+    }
 
-        SendInput();
-
-        if (hasUpdate)
+    public void StartClient()
+    {
+        try
         {
-            // el server es autoritativo → actualiza mi posición real
-            localPlayer.transform.position = new Vector3(client_x, client_y, 0);
+            clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            serverEP = new IPEndPoint(IPAddress.Parse(serverIP), port);
 
-            // también actualiza el player del server
-            remoteServer.transform.position = new Vector3(server_x, server_y, 0);
+            running = true;
+            receiveThread = new Thread(ReceiveLoop);
+            receiveThread.IsBackground = true;
+            receiveThread.Start();
 
-            hasUpdate = false;
+            Debug.Log("[CLIENT] Cliente UDP iniciado. Server: " + serverIP + ":" + port);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("[CLIENT] Error al iniciar: " + e.Message);
         }
     }
 
-
-
-    void SendInput()
+    // API pública: enviar input (W/A/S/D o NONE)
+    public void SendInput(string input)
     {
-        string input = "NONE";
+        if (!running || clientSocket == null || serverEP == null) return;
 
-        if (Keyboard.current.wKey.isPressed) input = "W";
-        else if (Keyboard.current.sKey.isPressed) input = "S";
-        else if (Keyboard.current.aKey.isPressed) input = "A";
-        else if (Keyboard.current.dKey.isPressed) input = "D";
-
-        string json = "{ \"id\": \"client\", \"input\": \"" + input + "\" }";
-
-        byte[] data = Encoding.UTF8.GetBytes(json);
-        clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
+        try
+        {
+            string json = "{ \"id\": \"client\", \"input\": \"" + input + "\" }";
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
+            //Debug.Log("[CLIENT] Sent input: " + json);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[CLIENT] SendInput error: " + e.Message);
+        }
     }
-
-
-
-    void StartClient()
-    {
-        clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        serverEP = new IPEndPoint(IPAddress.Parse(serverIP), port);
-
-        running = true;
-        receiveThread = new Thread(ReceiveLoop);
-        receiveThread.Start();
-
-        Debug.Log("[CLIENT] Cliente iniciado.");
-    }
-
-
 
     void ReceiveLoop()
     {
@@ -100,45 +95,52 @@ public class ClientUDP : MonoBehaviour
                 int received = clientSocket.ReceiveFrom(buffer, ref remote);
                 string msg = Encoding.UTF8.GetString(buffer, 0, received);
 
+                // Parse server message of form:
+                // { "server_x": ..., "server_y": ..., "client_x": ..., "client_y": ... }
                 ParseServerJSON(msg);
+
                 hasUpdate = true;
             }
-            catch { }
+            catch (Exception) { }
         }
     }
-
-
 
     void ParseServerJSON(string json)
     {
-        json = json.Trim().TrimStart('{').TrimEnd('}');
-        string[] pairs = json.Split(',');
-
-        foreach (string pair in pairs)
+        try
         {
-            string[] kv = pair.Split(':');
-            if (kv.Length != 2) continue;
+            json = json.Trim().TrimStart('{').TrimEnd('}');
+            string[] pairs = json.Split(',');
 
-            string key = kv[0].Trim().Replace("\"", "");
-            string value = kv[1].Trim().Replace("\"", "");
-
-            float f = float.Parse(value, CultureInfo.InvariantCulture);
-
-            switch (key)
+            foreach (string pair in pairs)
             {
-                case "server_x": server_x = f; break;
-                case "server_y": server_y = f; break;
-                case "client_x": client_x = f; break;
-                case "client_y": client_y = f; break;
+                string[] kv = pair.Split(':');
+                if (kv.Length != 2) continue;
+
+                string key = kv[0].Trim().Replace("\"", "");
+                string value = kv[1].Trim().Replace("\"", "");
+
+                float f = float.Parse(value, CultureInfo.InvariantCulture);
+
+                switch (key)
+                {
+                    case "server_x": server_x = f; break;
+                    case "server_y": server_y = f; break;
+                    case "client_x": client_x = f; break;
+                    case "client_y": client_y = f; break;
+                }
             }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[CLIENT] ParseServerJSON error: " + e.Message + " | raw: " + json);
         }
     }
 
-
-    void OnApplicationQuit()
+    public void OnApplicationQuit()
     {
         running = false;
-        receiveThread?.Abort();
-        clientSocket?.Close();
+        try { receiveThread?.Abort(); } catch { }
+        try { clientSocket?.Close(); } catch { }
     }
 }

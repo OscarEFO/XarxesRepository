@@ -4,86 +4,52 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using System.Globalization;
 
 public class ServerUDP : MonoBehaviour
 {
     private Socket serverSocket;
     private Thread receiveThread;
+    private Thread sendThread;
     private bool running = false;
 
     public int port = 9050;
 
-    // Player del servidor (lo mueve WASD de la ventana Server)
-    public GameObject serverPlayer;
+    [Header("Scene Objects")]
+    public GameObject serverPlayer;       // Player local
+    public GameObject remoteClientPlayer; // Representación del cliente
 
-    // Player del cliente representado en el servidor
-    public GameObject remoteClient;
+    private PlayerMovement serverMovement;
 
-    // Posición oficial del cliente (la controla el server)
-    private Vector2 clientPos = Vector2.zero;
+    // Vars autoritativas
+    private volatile float client_x = 0f, client_y = 0f;
+    private volatile float server_x = 0f, server_y = 0f;
 
-    // Input recibido del cliente
-    private volatile string lastClientInput = "NONE";
-
-    public float moveSpeed = 5f;
+    // Último endpoint del cliente (para enviarle datos)
+    private volatile EndPoint lastClientEP = null;
 
     void Start()
     {
-        if (serverPlayer == null || remoteClient == null)
+        if (serverPlayer == null || remoteClientPlayer == null)
         {
-            Debug.LogError("[SERVER] Debes asignar serverPlayer y remoteClient!");
+            Debug.LogError("[SERVER] Asigna serverPlayer y remoteClientPlayer!");
             return;
         }
+
+        serverMovement = serverPlayer.GetComponent<PlayerMovement>();
 
         StartServer();
     }
 
-
     void Update()
     {
-        // 1. Mover al server (servidor es autoritativo de sí mismo)
-        HandleServerMovement();
+        // Actualizamos la posición del serverPlayer por si se mueve localmente
+        server_x = serverPlayer.transform.position.x;
+        server_y = serverPlayer.transform.position.y;
 
-        // 2. Mover player del cliente según inputs recibidos
-        HandleClientMovement();
-
-        // 3. Actualizar posiciones en escena
-        remoteClient.transform.position = clientPos;
+        // Actualizamos la visualización del cliente
+        remoteClientPlayer.transform.position = new Vector3(client_x, client_y, 0f);
     }
-
-
-    void HandleServerMovement()
-    {
-        if (Keyboard.current == null) return;
-
-        Vector2 move = Vector2.zero;
-
-        if (Keyboard.current.wKey.isPressed) move += Vector2.up;
-        if (Keyboard.current.sKey.isPressed) move += Vector2.down;
-        if (Keyboard.current.aKey.isPressed) move += Vector2.left;
-        if (Keyboard.current.dKey.isPressed) move += Vector2.right;
-
-        serverPlayer.transform.Translate(move.normalized * moveSpeed * Time.deltaTime);
-    }
-
-
-    void HandleClientMovement()
-    {
-        Vector2 dir = Vector2.zero;
-
-        switch (lastClientInput)
-        {
-            case "W": dir = Vector2.up; break;
-            case "S": dir = Vector2.down; break;
-            case "A": dir = Vector2.left; break;
-            case "D": dir = Vector2.right; break;
-        }
-
-        clientPos += dir.normalized * moveSpeed * Time.deltaTime;
-    }
-
 
     void StartServer()
     {
@@ -94,10 +60,17 @@ public class ServerUDP : MonoBehaviour
 
             running = true;
 
+            // Hilo de recepción (inputs)
             receiveThread = new Thread(ReceiveLoop);
+            receiveThread.IsBackground = true;
             receiveThread.Start();
 
-            Debug.Log("[SERVER] Servidor UDP escuchando en puerto " + port);
+            // Hilo de envío (snapshots)
+            sendThread = new Thread(SnapshotLoop);
+            sendThread.IsBackground = true;
+            sendThread.Start();
+
+            Debug.Log("[SERVER] UDP escuchando en puerto " + port);
         }
         catch (Exception e)
         {
@@ -105,8 +78,9 @@ public class ServerUDP : MonoBehaviour
         }
     }
 
-
-
+    // ----------------------
+    // HILO DE RECEPCIÓN
+    // ----------------------
     void ReceiveLoop()
     {
         byte[] buffer = new byte[2048];
@@ -119,51 +93,100 @@ public class ServerUDP : MonoBehaviour
                 int received = serverSocket.ReceiveFrom(buffer, ref clientEP);
                 string msg = Encoding.UTF8.GetString(buffer, 0, received);
 
-                //Debug.Log("[SERVER] Recibido: " + msg);
+                // Guardamos la IP del cliente para enviárle snapshots
+                lastClientEP = clientEP;
 
-                ParseClientJSON(msg);
-
-                // server envía las POSICIONES OFICIALES
-                string response =
-                    "{ \"server_x\": " + serverPlayer.transform.position.x.ToString(CultureInfo.InvariantCulture) +
-                    ", \"server_y\": " + serverPlayer.transform.position.y.ToString(CultureInfo.InvariantCulture) +
-                    ", \"client_x\": " + clientPos.x.ToString(CultureInfo.InvariantCulture) +
-                    ", \"client_y\": " + clientPos.y.ToString(CultureInfo.InvariantCulture) +
-                    " }";
-
-                byte[] data = Encoding.UTF8.GetBytes(response);
-                serverSocket.SendTo(data, data.Length, SocketFlags.None, clientEP);
+                string input = ParseInput(msg);
+                if (input != null)
+                    ApplyClientInput(input);
             }
             catch { }
         }
     }
 
-
-
-    void ParseClientJSON(string json)
+    // ----------------------
+    // HILO DE ENVÍO CONTINUO
+    // ----------------------
+    void SnapshotLoop()
     {
-        json = json.Trim().TrimStart('{').TrimEnd('}');
-        string[] pairs = json.Split(',');
-
-        foreach (string pair in pairs)
+        while (running)
         {
-            string[] kv = pair.Split(':');
-            if (kv.Length != 2) continue;
+            try
+            {
+                if (lastClientEP != null)
+                {
+                    string json =
+                        "{ \"server_x\": " + server_x.ToString(CultureInfo.InvariantCulture) +
+                        ", \"server_y\": " + server_y.ToString(CultureInfo.InvariantCulture) +
+                        ", \"client_x\": " + client_x.ToString(CultureInfo.InvariantCulture) +
+                        ", \"client_y\": " + client_y.ToString(CultureInfo.InvariantCulture) +
+                        " }";
 
-            string key = kv[0].Trim().Replace("\"", "");
-            string value = kv[1].Trim().Replace("\"", "");
+                    byte[] data = Encoding.UTF8.GetBytes(json);
+                    serverSocket.SendTo(data, data.Length, SocketFlags.None, lastClientEP);
+                }
+            }
+            catch { }
 
-            if (key == "input")
-                lastClientInput = value;
+            Thread.Sleep(20); // Enviar 50 veces por segundo
         }
     }
 
+    // ----------------------
+    // PARSEAR INPUT
+    // ----------------------
+    string ParseInput(string json)
+    {
+        try
+        {
+            json = json.Trim().TrimStart('{').TrimEnd('}');
+            string[] pairs = json.Split(',');
 
+            string id = "";
+            string input = "";
+
+            foreach (string pair in pairs)
+            {
+                string[] kv = pair.Split(':');
+                if (kv.Length != 2) continue;
+
+                string key = kv[0].Trim().Replace("\"", "");
+                string value = kv[1].Trim().Replace("\"", "");
+
+                if (key == "id") id = value;
+                if (key == "input") input = value;
+            }
+
+            if (id == "client")
+                return input;
+        }
+        catch { }
+
+        return null;
+    }
+
+    // ----------------------
+    // APLICAR INPUT DEL CLIENTE
+    // ----------------------
+    void ApplyClientInput(string input)
+    {
+        float sp = 5f * Time.deltaTime;
+
+        switch (input)
+        {
+            case "W": client_y += sp; break;
+            case "S": client_y -= sp; break;
+            case "A": client_x -= sp; break;
+            case "D": client_x += sp; break;
+        }
+    }
 
     void OnApplicationQuit()
     {
         running = false;
-        receiveThread?.Abort();
-        serverSocket?.Close();
+
+        try { receiveThread?.Abort(); } catch { }
+        try { sendThread?.Abort(); } catch { }
+        try { serverSocket?.Close(); } catch { }
     }
 }
