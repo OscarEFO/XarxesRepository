@@ -1723,6 +1723,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   speed: 3
+  firePoint: {fileID: 0}
 --- !u!212 &1517488112
 SpriteRenderer:
   m_ObjectHideFlags: 0
@@ -1893,6 +1894,8 @@ MonoBehaviour:
   port: 9050
   serverPlayer: {fileID: 1517488110}
   remoteClientPlayer: {fileID: 642100127}
+  projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
+  projectileSpeed: 10
 --- !u!4 &1604730398
 Transform:
   m_ObjectHideFlags: 0

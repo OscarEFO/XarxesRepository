@@ -4,8 +4,10 @@ using UnityEngine.InputSystem;
 public class PlayerMovement : MonoBehaviour
 {
     public float speed = 3f;
-
-    // Último input leído (cache para evitar enviar constantemente lo mismo)
+    public Transform firePoint;
+    // ï¿½ltimo input leï¿½do (cache para evitar enviar constantemente lo mismo)
+    public GameObject projectilePrefab;
+    public float projectileSpeed = 10f;
     private string lastInput = "NONE";
 
     void Update()
@@ -21,8 +23,15 @@ public class PlayerMovement : MonoBehaviour
         if (Keyboard.current.dKey.isPressed) move += Vector3.right;
 
         transform.Translate(move.normalized * speed * Time.deltaTime, Space.World);
+        
+        if (ClientUDP.Instance != null)
+            ClientUDP.Instance.SendPlayerState(transform.position, transform.eulerAngles.z);
 
-        // Actualizamos lastInput para que GetInputString devuelva el input actual
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            ShootProjectile();
+        }        // Actualizamos lastInput para que GetInputString devuelva el input actual
+
         lastInput = ComputeInputString();
     }
 
@@ -31,7 +40,18 @@ public class PlayerMovement : MonoBehaviour
     {
         return lastInput;
     }
+    private void ShootProjectile()
+    {
+        if (firePoint == null || projectilePrefab == null) return;
 
+        GameObject proj = Instantiate(projectilePrefab, firePoint.position, transform.rotation);
+        Rigidbody2D rb = proj.GetComponent<Rigidbody2D>();
+        if (rb != null)
+            rb.linearVelocity = transform.up * projectileSpeed;
+
+        if (ClientUDP.Instance != null)
+            ClientUDP.Instance.SendProjectile(firePoint.position, transform.eulerAngles.z, transform.up);
+    }
     // Calcula el input a partir del teclado (sin cambiar estado)
     private string ComputeInputString()
     {
@@ -44,7 +64,7 @@ public class PlayerMovement : MonoBehaviour
         return "NONE";
     }
 
-    // Aplicar la posición autoritativa (usado por NetworkPlayer cuando llega estado del server)
+    // Aplicar la posiciï¿½n autoritativa (usado por NetworkPlayer cuando llega estado del server)
     public void ApplyPosition(Vector2 pos)
     {
         // Mantener z = 0 (2D)

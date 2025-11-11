@@ -66,20 +66,44 @@ public class ClientUDP : MonoBehaviour
     }
 
     // API pública: enviar input (W/A/S/D o NONE)
-    public void SendInput(string input)
+    public void SendPlayerState(Vector2 position, float rotationZ)
     {
         if (!running || clientSocket == null || serverEP == null) return;
 
         try
         {
-            string json = "{ \"id\": \"client\", \"input\": \"" + input + "\" }";
+            string json = "{ \"type\": \"playerState\", \"x\": " + position.x.ToString(CultureInfo.InvariantCulture) +
+                      ", \"y\": " + position.y.ToString(CultureInfo.InvariantCulture) +
+                      ", \"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + " }";
+
             byte[] data = Encoding.UTF8.GetBytes(json);
             clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
-            //Debug.Log("[CLIENT] Sent input: " + json);
         }
         catch (Exception e)
         {
-            Debug.LogWarning("[CLIENT] SendInput error: " + e.Message);
+            Debug.LogWarning("[CLIENT] SendPlayerState error: " + e.Message);
+        }
+    }
+    public void SendProjectile(Vector2 position, float rotationZ, Vector2 direction)
+    {   
+        if (!running || clientSocket == null || serverEP == null) return;
+
+        try
+        {
+            string json = "{ \"type\": \"spawnProjectile\", " +
+                      "\"x\": " + position.x.ToString(CultureInfo.InvariantCulture) + ", " +
+                      "\"y\": " + position.y.ToString(CultureInfo.InvariantCulture) + ", " +
+                      "\"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + ", " +
+                      "\"dirX\": " + direction.x.ToString(CultureInfo.InvariantCulture) + ", " +
+                      "\"dirY\": " + direction.y.ToString(CultureInfo.InvariantCulture) +
+                      " }";
+
+        byte[] data = Encoding.UTF8.GetBytes(json);
+        clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[CLIENT] SendProjectile error: " + e.Message);
         }
     }
 

@@ -1794,6 +1794,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   speed: 3
+  firePoint: {fileID: 90041769}
+  projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
+  projectileSpeed: 10
 --- !u!212 &1424337626
 SpriteRenderer:
   m_ObjectHideFlags: 0
@@ -1883,6 +1886,7 @@ MonoBehaviour:
   projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
   projectileSpeed: 10
   fireRate: 1
+  rotationOffset: -90
   firePoint: {fileID: 90041769}
 --- !u!1 &1499226901
 GameObject:

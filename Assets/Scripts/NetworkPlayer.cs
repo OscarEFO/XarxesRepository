@@ -25,7 +25,9 @@ public class NetworkPlayer : MonoBehaviour
 
         if (input != "NONE")
         {
-            ClientUDP.Instance.SendInput(input);
+                Vector2 currentPos = transform.position;
+                float rotationZ = transform.eulerAngles.z;
+                ClientUDP.Instance.SendPlayerState(currentPos, rotationZ);
         }
 
         // 3) if server sent an authoritative update, apply it

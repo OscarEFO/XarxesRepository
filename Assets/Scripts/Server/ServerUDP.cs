@@ -17,7 +17,7 @@ public class ServerUDP : MonoBehaviour
 
     [Header("Scene Objects")]
     public GameObject serverPlayer;       // Player local
-    public GameObject remoteClientPlayer; // Representación del cliente
+    public GameObject remoteClientPlayer; // Representaciï¿½n del cliente
 
     private PlayerMovement serverMovement;
 
@@ -25,7 +25,7 @@ public class ServerUDP : MonoBehaviour
     private volatile float client_x = 0f, client_y = 0f;
     private volatile float server_x = 0f, server_y = 0f;
 
-    // Último endpoint del cliente (para enviarle datos)
+    // ï¿½ltimo endpoint del cliente (para enviarle datos)
     private volatile EndPoint lastClientEP = null;
 
     void Start()
@@ -43,11 +43,11 @@ public class ServerUDP : MonoBehaviour
 
     void Update()
     {
-        // Actualizamos la posición del serverPlayer por si se mueve localmente
+        // Actualizamos la posiciï¿½n del serverPlayer por si se mueve localmente
         server_x = serverPlayer.transform.position.x;
         server_y = serverPlayer.transform.position.y;
 
-        // Actualizamos la visualización del cliente
+        // Actualizamos la visualizaciï¿½n del cliente
         remoteClientPlayer.transform.position = new Vector3(client_x, client_y, 0f);
     }
 
@@ -60,12 +60,12 @@ public class ServerUDP : MonoBehaviour
 
             running = true;
 
-            // Hilo de recepción (inputs)
+            // Hilo de recepciï¿½n (inputs)
             receiveThread = new Thread(ReceiveLoop);
             receiveThread.IsBackground = true;
             receiveThread.Start();
 
-            // Hilo de envío (snapshots)
+            // Hilo de envï¿½o (snapshots)
             sendThread = new Thread(SnapshotLoop);
             sendThread.IsBackground = true;
             sendThread.Start();
@@ -79,7 +79,7 @@ public class ServerUDP : MonoBehaviour
     }
 
     // ----------------------
-    // HILO DE RECEPCIÓN
+    // HILO DE RECEPCIï¿½N
     // ----------------------
     void ReceiveLoop()
     {
@@ -93,19 +93,74 @@ public class ServerUDP : MonoBehaviour
                 int received = serverSocket.ReceiveFrom(buffer, ref clientEP);
                 string msg = Encoding.UTF8.GetString(buffer, 0, received);
 
-                // Guardamos la IP del cliente para enviárle snapshots
+                // Guardamos la IP del cliente para enviï¿½rle snapshots
                 lastClientEP = clientEP;
 
-                string input = ParseInput(msg);
-                if (input != null)
-                    ApplyClientInput(input);
+                ParseClientMessage(msg);
             }
             catch { }
         }
     }
+    void ParseClientMessage(string json)
+    {
+        try
+        {
+            if (json.Contains("\"type\": \"playerState\""))
+            {
+                // Extract x, y, rotationZ
+                float x = ExtractFloat(json, "x");
+                float y = ExtractFloat(json, "y");
+                float rotationZ = ExtractFloat(json, "rotationZ");
 
+                client_x = x;
+                client_y = y;
+
+                remoteClientPlayer.transform.rotation = Quaternion.Euler(0,0,rotationZ);
+            }
+            else if (json.Contains("\"type\": \"spawnProjectile\""))
+            {
+                float x = ExtractFloat(json, "x");
+                float y = ExtractFloat(json, "y");
+                float rotationZ = ExtractFloat(json, "rotationZ");
+                float dirX = ExtractFloat(json, "dirX");
+                float dirY = ExtractFloat(json, "dirY");
+
+                Vector2 spawnPos = new Vector2(x, y);
+                Vector2 direction = new Vector2(dirX, dirY).normalized;
+
+                SpawnProjectile(spawnPos, rotationZ, direction);
+            }
+        }
+        catch { }
+    }
+    [Header("Projectile Prefab")]
+    public GameObject projectilePrefab; 
+    public float projectileSpeed = 10f; 
+
+    void SpawnProjectile(Vector2 position, float rotationZ, Vector2 direction)
+    {
+        if (projectilePrefab == null) return;
+
+        GameObject proj = Instantiate(projectilePrefab, position, Quaternion.Euler(0, 0, rotationZ));
+
+        Rigidbody2D rb = proj.GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.linearVelocity = direction.normalized * projectileSpeed;
+        }
+    }
+    float ExtractFloat(string json, string key)
+    {
+        int idx = json.IndexOf("\"" + key + "\":");
+        if (idx == -1) return 0f;
+
+        int start = idx + key.Length + 3;
+        int end = json.IndexOfAny(new char[] { ',', '}' }, start);
+        string value = json.Substring(start, end - start);
+        return float.Parse(value, CultureInfo.InvariantCulture);
+    }
     // ----------------------
-    // HILO DE ENVÍO CONTINUO
+    // HILO DE ENVï¿½O CONTINUO
     // ----------------------
     void SnapshotLoop()
     {
