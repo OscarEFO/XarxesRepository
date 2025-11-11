@@ -24,6 +24,16 @@ public class PlayerShooting : MonoBehaviour
 
     void Update()
     {
+        if (Mouse.current == null) return;
+
+    
+        Vector3 mousePos = mainCam.ScreenToWorldPoint(Mouse.current.position.ReadValue());
+        mousePos.z = 0f;
+
+        Vector3 direction = (mousePos - transform.position).normalized;
+
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        transform.rotation = Quaternion.Euler(0f, 0f, angle - 90f); 
         if (Mouse.current != null && Mouse.current.leftButton.isPressed && Time.time >= nextFireTime)
         {
             Shoot();
