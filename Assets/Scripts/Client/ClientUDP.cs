@@ -17,75 +17,76 @@ public class ClientUDP : MonoBehaviour
     public string serverIP = "127.0.0.1";
     public int port = 9050;
 
-    public GameObject player;
+    public GameObject localPlayer;     // Player del CLIENTE
+    public GameObject remoteServer;    // Player del SERVER en la escena
+
+    private volatile float server_x, server_y;
+    private volatile float client_x, client_y;
+
+    private volatile bool hasUpdate = false;
 
     void Start()
     {
-        if (player == null)
+        if (!localPlayer || !remoteServer)
         {
-            Debug.LogError("[CLIENT] No se asignó Player en el inspector!");
+            Debug.LogError("[CLIENT] Falta asignar localPlayer o remoteServer!");
             return;
         }
 
         StartClient();
     }
 
+
     void Update()
     {
-        if (!running || player == null) return;
+        if (!running) return;
 
-        if (IsMoving())
+        SendInput();
+
+        if (hasUpdate)
         {
-            SendPosition();
+            // el server es autoritativo → actualiza mi posición real
+            localPlayer.transform.position = new Vector3(client_x, client_y, 0);
+
+            // también actualiza el player del server
+            remoteServer.transform.position = new Vector3(server_x, server_y, 0);
+
+            hasUpdate = false;
         }
     }
 
-    bool IsMoving()
+
+
+    void SendInput()
     {
-        if (Keyboard.current == null) return false;
+        string input = "NONE";
 
-        return
-            Keyboard.current.wKey.isPressed ||
-            Keyboard.current.aKey.isPressed ||
-            Keyboard.current.sKey.isPressed ||
-            Keyboard.current.dKey.isPressed;
-    }
+        if (Keyboard.current.wKey.isPressed) input = "W";
+        else if (Keyboard.current.sKey.isPressed) input = "S";
+        else if (Keyboard.current.aKey.isPressed) input = "A";
+        else if (Keyboard.current.dKey.isPressed) input = "D";
 
-    void StartClient()
-    {
-        try
-        {
-            clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            serverEP = new IPEndPoint(IPAddress.Parse(serverIP), port);
-
-            running = true;
-            receiveThread = new Thread(ReceiveLoop);
-            receiveThread.Start();
-
-            Debug.Log("[CLIENT] Cliente UDP iniciado.");
-        }
-        catch (Exception e)
-        {
-            Debug.LogError("[CLIENT] Error al iniciar: " + e.Message);
-        }
-    }
-
-    void SendPosition()
-    {
-        Vector3 p = player.transform.position;
-
-        if (float.IsNaN(p.x) || float.IsNaN(p.y))
-            return;
-
-        string json = "{ \"posx\": " + p.x.ToString(CultureInfo.InvariantCulture) +
-                      ", \"posy\": " + p.y.ToString(CultureInfo.InvariantCulture) +
-                      " }";
+        string json = "{ \"id\": \"client\", \"input\": \"" + input + "\" }";
 
         byte[] data = Encoding.UTF8.GetBytes(json);
         clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
-
-        Debug.Log("[CLIENT] Enviado: " + json);
     }
+
+
+
+    void StartClient()
+    {
+        clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        serverEP = new IPEndPoint(IPAddress.Parse(serverIP), port);
+
+        running = true;
+        receiveThread = new Thread(ReceiveLoop);
+        receiveThread.Start();
+
+        Debug.Log("[CLIENT] Cliente iniciado.");
+    }
+
+
 
     void ReceiveLoop()
     {
@@ -99,11 +100,40 @@ public class ClientUDP : MonoBehaviour
                 int received = clientSocket.ReceiveFrom(buffer, ref remote);
                 string msg = Encoding.UTF8.GetString(buffer, 0, received);
 
-                Debug.Log("[CLIENT] ECO del servidor: " + msg);
+                ParseServerJSON(msg);
+                hasUpdate = true;
             }
             catch { }
         }
     }
+
+
+
+    void ParseServerJSON(string json)
+    {
+        json = json.Trim().TrimStart('{').TrimEnd('}');
+        string[] pairs = json.Split(',');
+
+        foreach (string pair in pairs)
+        {
+            string[] kv = pair.Split(':');
+            if (kv.Length != 2) continue;
+
+            string key = kv[0].Trim().Replace("\"", "");
+            string value = kv[1].Trim().Replace("\"", "");
+
+            float f = float.Parse(value, CultureInfo.InvariantCulture);
+
+            switch (key)
+            {
+                case "server_x": server_x = f; break;
+                case "server_y": server_y = f; break;
+                case "client_x": client_x = f; break;
+                case "client_y": client_y = f; break;
+            }
+        }
+    }
+
 
     void OnApplicationQuit()
     {
