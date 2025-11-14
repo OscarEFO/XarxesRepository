@@ -1669,6 +1669,51 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1283613827
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1283613829}
+  - component: {fileID: 1283613828}
+  m_Layer: 0
+  m_Name: NetworkShootingClient
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1283613828
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1283613827}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57410b055933e4b4aae1107725755cd1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkShootingClient
+  projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
+--- !u!4 &1283613829
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1283613827}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2.48577, y: 1.84762, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1410805659
 GameObject:
   m_ObjectHideFlags: 0
@@ -1781,6 +1826,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkPlayer
   remoteServer: {fileID: 757667428}
+  sendInterval: 0.05
+  positionThreshold: 0.01
+  rotationThreshold: 0.5
 --- !u!114 &1424337625
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1794,9 +1842,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   speed: 3
-  firePoint: {fileID: 90041769}
-  projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
-  projectileSpeed: 10
 --- !u!212 &1424337626
 SpriteRenderer:
   m_ObjectHideFlags: 0
@@ -1883,11 +1928,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 988e201aa057c034889d143eb00f75f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerShooting
-  projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
-  projectileSpeed: 10
-  fireRate: 1
-  rotationOffset: -90
   firePoint: {fileID: 90041769}
+  rotationOffset: -90
+  fireRate: 1
 --- !u!1 &1499226901
 GameObject:
   m_ObjectHideFlags: 0
@@ -2821,3 +2864,4 @@ SceneRoots:
   - {fileID: 445107704}
   - {fileID: 1424337627}
   - {fileID: 757667430}
+  - {fileID: 1283613829}

@@ -3,49 +3,51 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerMovement))]
 public class NetworkPlayer : MonoBehaviour
 {
-    public GameObject remoteServer; // assign in inspector: the object that shows the server player
-
+    public GameObject remoteServer;
     private PlayerMovement pm;
-    private string lastSentInput = "NONE";
+
+    public float sendInterval = 0.05f;
+    private float sendTimer = 0f;
 
     void Start()
     {
         pm = GetComponent<PlayerMovement>();
-
-        if (remoteServer == null)
-            Debug.LogWarning("[NetworkPlayer] remoteServer not assigned - remote player won't be visible.");
     }
 
     void Update()
     {
-        if (ClientUDP.Instance == null) return; // not started yet
+        if (ClientUDP.Instance == null) return;
 
-        // 1) read current local input from PlayerMovement
-        string input = pm.GetInputString();
-
-        if (input != "NONE")
+        // --- 1) enviar input + rotación ---
+        sendTimer += Time.deltaTime;
+        if (sendTimer >= sendInterval)
         {
-                Vector2 currentPos = transform.position;
-                float rotationZ = transform.eulerAngles.z;
-                ClientUDP.Instance.SendPlayerState(currentPos, rotationZ);
+            sendTimer = 0f;
+
+            Vector2 input = pm.GetInputVector();
+            float rotationZ = transform.eulerAngles.z;
+
+            ClientUDP.Instance.SendInput(input, rotationZ);
         }
 
-        // 3) if server sent an authoritative update, apply it
+        // --- 2) aplicar snapshot autoritativo ---
         if (ClientUDP.Instance.hasUpdate)
         {
-            // server_x/server_y = server player pos
-            // client_x/client_y = authoritative client pos (yours)
-            // Apply authoritative client position to local PlayerMovement (reconciliation)
-            Vector2 authoritativeClientPos = new Vector2(ClientUDP.Instance.client_x, ClientUDP.Instance.client_y);
-            pm.ApplyPosition(authoritativeClientPos);
+            Vector2 authoritative = new Vector2(ClientUDP.Instance.client_x, ClientUDP.Instance.client_y);
 
-            // Update remote server visualization
+            pm.ApplyPosition(authoritative);
+            transform.rotation = Quaternion.Euler(0, 0, ClientUDP.Instance.client_rot);
+
+            // actualizar representación del server
             if (remoteServer != null)
             {
-                remoteServer.transform.position = new Vector3(ClientUDP.Instance.server_x, ClientUDP.Instance.server_y, 0f);
+                remoteServer.transform.position =
+                    new Vector3(ClientUDP.Instance.server_x, ClientUDP.Instance.server_y, 0);
+
+                remoteServer.transform.rotation =
+                    Quaternion.Euler(0, 0, ClientUDP.Instance.server_rot);
             }
 
-            // clear update flag so we don't reapply repeatedly until next server packet
             ClientUDP.Instance.hasUpdate = false;
         }
     }

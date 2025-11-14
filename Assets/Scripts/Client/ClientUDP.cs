@@ -18,19 +18,16 @@ public class ClientUDP : MonoBehaviour
     public string serverIP = "127.0.0.1";
     public int port = 9050;
 
-    // Estado recibido del servidor (public para lectura por NetworkPlayer)
+    // Estado recibido del servidor (lectura por NetworkPlayer)
     public volatile float server_x, server_y;
     public volatile float client_x, client_y;
+    public volatile float server_rot = 0f;
+    public volatile float client_rot = 0f;
     public volatile bool hasUpdate = false;
 
     void Awake()
     {
-        // Singleton simple
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
+        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
     }
@@ -65,51 +62,55 @@ public class ClientUDP : MonoBehaviour
         }
     }
 
-    // API pública: enviar input (W/A/S/D o NONE)
-    public void SendPlayerState(Vector2 position, float rotationZ)
+    // --- Enviar input vector al servidor ---
+    public void SendInput(Vector2 input, float rotationZ)
     {
         if (!running || clientSocket == null || serverEP == null) return;
 
         try
         {
-            string json = "{ \"type\": \"playerState\", \"x\": " + position.x.ToString(CultureInfo.InvariantCulture) +
-                      ", \"y\": " + position.y.ToString(CultureInfo.InvariantCulture) +
-                      ", \"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + " }";
+            string json =
+                "{ \"type\": \"input\", " +
+                "\"ix\": " + input.x.ToString(CultureInfo.InvariantCulture) + ", " +
+                "\"iy\": " + input.y.ToString(CultureInfo.InvariantCulture) + ", " +
+                "\"rot\": " + rotationZ.ToString(CultureInfo.InvariantCulture) +
+                " }";
+
+            byte[] data = Encoding.UTF8.GetBytes(json);
+            clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
+        }
+        catch { }
+    }
+
+    // --- Enviar petición de disparo al servidor ---
+    public void SendShootRequest(Vector2 position, float rotationZ, Vector2 direction)
+    {
+        if (!running || clientSocket == null || serverEP == null) return;
+
+        try
+        {
+            string json =
+                "{ \"type\": \"shoot\", " +
+                "\"x\": " + position.x.ToString(CultureInfo.InvariantCulture) + ", " +
+                "\"y\": " + position.y.ToString(CultureInfo.InvariantCulture) + ", " +
+                "\"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + ", " +
+                "\"dirX\": " + direction.x.ToString(CultureInfo.InvariantCulture) + ", " +
+                "\"dirY\": " + direction.y.ToString(CultureInfo.InvariantCulture) +
+                " }";
 
             byte[] data = Encoding.UTF8.GetBytes(json);
             clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
         }
         catch (Exception e)
         {
-            Debug.LogWarning("[CLIENT] SendPlayerState error: " + e.Message);
-        }
-    }
-    public void SendProjectile(Vector2 position, float rotationZ, Vector2 direction)
-    {   
-        if (!running || clientSocket == null || serverEP == null) return;
-
-        try
-        {
-            string json = "{ \"type\": \"spawnProjectile\", " +
-                      "\"x\": " + position.x.ToString(CultureInfo.InvariantCulture) + ", " +
-                      "\"y\": " + position.y.ToString(CultureInfo.InvariantCulture) + ", " +
-                      "\"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + ", " +
-                      "\"dirX\": " + direction.x.ToString(CultureInfo.InvariantCulture) + ", " +
-                      "\"dirY\": " + direction.y.ToString(CultureInfo.InvariantCulture) +
-                      " }";
-
-        byte[] data = Encoding.UTF8.GetBytes(json);
-        clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
-        }
-        catch (Exception e)
-        {
-            Debug.LogWarning("[CLIENT] SendProjectile error: " + e.Message);
+            Debug.LogWarning("[CLIENT] SendShootRequest error: " + e.Message);
         }
     }
 
+    // --- Recepción en hilo ---
     void ReceiveLoop()
     {
-        byte[] buffer = new byte[2048];
+        byte[] buffer = new byte[4096];
         EndPoint remote = new IPEndPoint(IPAddress.Any, 0);
 
         while (running)
@@ -119,11 +120,19 @@ public class ClientUDP : MonoBehaviour
                 int received = clientSocket.ReceiveFrom(buffer, ref remote);
                 string msg = Encoding.UTF8.GetString(buffer, 0, received);
 
-                // Parse server message of form:
-                // { "server_x": ..., "server_y": ..., "client_x": ..., "client_y": ... }
-                ParseServerJSON(msg);
-
-                hasUpdate = true;
+                if (msg.Contains("\"server_x\"") || msg.Contains("\"client_x\""))
+                {
+                    ParseServerJSON(msg);
+                    hasUpdate = true;
+                }
+                else if (msg.Contains("\"type\": \"spawnProjectile\""))
+                {
+                    ParseSpawnJSON(msg);
+                }
+                else
+                {
+                    // otros tipos si los hay
+                }
             }
             catch (Exception) { }
         }
@@ -152,6 +161,8 @@ public class ClientUDP : MonoBehaviour
                     case "server_y": server_y = f; break;
                     case "client_x": client_x = f; break;
                     case "client_y": client_y = f; break;
+                    case "server_rot": server_rot = f; break;
+                    case "client_rot": client_rot = f; break;
                 }
             }
         }
@@ -159,6 +170,45 @@ public class ClientUDP : MonoBehaviour
         {
             Debug.LogWarning("[CLIENT] ParseServerJSON error: " + e.Message + " | raw: " + json);
         }
+    }
+
+    void ParseSpawnJSON(string json)
+    {
+        try
+        {
+            float x = ExtractFloat(json, "x");
+            float y = ExtractFloat(json, "y");
+            float rotationZ = ExtractFloat(json, "rotationZ");
+            float dirX = ExtractFloat(json, "dirX");
+            float dirY = ExtractFloat(json, "dirY");
+            float speed = ExtractFloat(json, "speed");
+
+            NetworkShootingClient.SpawnInfo info = new NetworkShootingClient.SpawnInfo
+            {
+                x = x,
+                y = y,
+                rotationZ = rotationZ,
+                dirX = dirX,
+                dirY = dirY,
+                speed = speed
+            };
+
+            NetworkShootingClient.Instance?.EnqueueSpawn(info);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[CLIENT] ParseSpawnJSON error: " + e.Message + " | raw: " + json);
+        }
+    }
+
+    float ExtractFloat(string json, string key)
+    {
+        int idx = json.IndexOf("\"" + key + "\":");
+        if (idx == -1) return 0f;
+        int start = idx + key.Length + 3;
+        int end = json.IndexOfAny(new char[] { ',', '}' }, start);
+        string value = json.Substring(start, end - start).Trim();
+        return float.Parse(value, CultureInfo.InvariantCulture);
     }
 
     public void OnApplicationQuit()

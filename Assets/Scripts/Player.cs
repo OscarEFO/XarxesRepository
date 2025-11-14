@@ -3,19 +3,24 @@ using UnityEngine.InputSystem;
 
 public class PlayerMovement : MonoBehaviour
 {
+    [Tooltip("Si true el script aplica movimiento localmente (use en Server player). Si false solo lee input para enviarlo.")]
+    public bool applyMovementLocally = false;
+
     public float speed = 3f;
-    public Transform firePoint;
-    // �ltimo input le�do (cache para evitar enviar constantemente lo mismo)
-    public GameObject projectilePrefab;
-    public float projectileSpeed = 10f;
+
+    // cached input string (W/A/S/D or NONE)
     private string lastInput = "NONE";
 
     void Update()
     {
-        // Movimiento local (responsivo)
-        if (Keyboard.current == null) return;
+        // Always update cached input so NetworkPlayer can read it
+        lastInput = ComputeInputString();
 
+        if (!applyMovementLocally) return;
+
+        // If this instance should move locally (server side)
         Vector3 move = Vector3.zero;
+        if (Keyboard.current == null) return;
 
         if (Keyboard.current.wKey.isPressed) move += Vector3.up;
         if (Keyboard.current.sKey.isPressed) move += Vector3.down;
@@ -23,40 +28,30 @@ public class PlayerMovement : MonoBehaviour
         if (Keyboard.current.dKey.isPressed) move += Vector3.right;
 
         transform.Translate(move.normalized * speed * Time.deltaTime, Space.World);
-        
-        if (ClientUDP.Instance != null)
-            ClientUDP.Instance.SendPlayerState(transform.position, transform.eulerAngles.z);
-
-        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-        {
-            ShootProjectile();
-        }        // Actualizamos lastInput para que GetInputString devuelva el input actual
-
-        lastInput = ComputeInputString();
     }
 
-    // Devuelve "W","A","S","D" o "NONE" basado en la entrada actual
+    // Devuelve "W","A","S","D" o "NONE"
     public string GetInputString()
     {
         return lastInput;
     }
-    private void ShootProjectile()
+
+    // Devuelve vector normalizado de la entrada actual (no mueve el transform)
+    public Vector2 GetInputVector()
     {
-        if (firePoint == null || projectilePrefab == null) return;
+        if (Keyboard.current == null) return Vector2.zero;
 
-        GameObject proj = Instantiate(projectilePrefab, firePoint.position, transform.rotation);
-        Rigidbody2D rb = proj.GetComponent<Rigidbody2D>();
-        if (rb != null)
-            rb.linearVelocity = transform.up * projectileSpeed;
-
-        if (ClientUDP.Instance != null)
-            ClientUDP.Instance.SendProjectile(firePoint.position, transform.eulerAngles.z, transform.up);
+        Vector2 v = Vector2.zero;
+        if (Keyboard.current.wKey.isPressed) v += Vector2.up;
+        if (Keyboard.current.sKey.isPressed) v += Vector2.down;
+        if (Keyboard.current.aKey.isPressed) v += Vector2.left;
+        if (Keyboard.current.dKey.isPressed) v += Vector2.right;
+        return v.normalized;
     }
-    // Calcula el input a partir del teclado (sin cambiar estado)
+
     private string ComputeInputString()
     {
         if (Keyboard.current == null) return "NONE";
-
         if (Keyboard.current.wKey.isPressed) return "W";
         if (Keyboard.current.sKey.isPressed) return "S";
         if (Keyboard.current.aKey.isPressed) return "A";
@@ -64,10 +59,9 @@ public class PlayerMovement : MonoBehaviour
         return "NONE";
     }
 
-    // Aplicar la posici�n autoritativa (usado por NetworkPlayer cuando llega estado del server)
+    // Aplicar posición autoritativa enviada por el servidor (reconciliación)
     public void ApplyPosition(Vector2 pos)
     {
-        // Mantener z = 0 (2D)
         transform.position = new Vector3(pos.x, pos.y, 0f);
     }
 }
