@@ -1,0 +1,446 @@
+fileFormatVersion: 2
+guid: 02b62720606e86a44be89e140616a347
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -415601915467846958
+    second: Asteroid2Sheet_0
+  - first:
+      213: 2190442177742108943
+    second: Asteroid2Sheet_1
+  - first:
+      213: 426162281138292612
+    second: Asteroid2Sheet_2
+  - first:
+      213: -3058823211543848847
+    second: Asteroid2Sheet_3
+  - first:
+      213: 1768416591781839594
+    second: Asteroid2Sheet_4
+  - first:
+      213: -7907531993015551438
+    second: Asteroid2Sheet_5
+  - first:
+      213: 4250747954538227348
+    second: Asteroid2Sheet_6
+  - first:
+      213: -1638955999558658731
+    second: Asteroid2Sheet_7
+  - first:
+      213: 5592073523210226047
+    second: Asteroid2Sheet_8
+  - first:
+      213: 3766985872492476811
+    second: Asteroid2Sheet_9
+  - first:
+      213: 2223524769993325308
+    second: Asteroid2Sheet_10
+  - first:
+      213: 2755777919549584154
+    second: Asteroid2Sheet_11
+  - first:
+      213: 98372577105771046
+    second: Asteroid2Sheet_12
+  - first:
+      213: 5217082014837735680
+    second: Asteroid2Sheet_13
+  - first:
+      213: 4233866971015950984
+    second: Asteroid2Sheet_14
+  - first:
+      213: 3241189895867604431
+    second: Asteroid2Sheet_15
+  - first:
+      213: 1667180019373875307
+    second: Asteroid2Sheet_16
+  - first:
+      213: 1733673201794203540
+    second: Asteroid2Sheet_17
+  - first:
+      213: -7389901863551903125
+    second: Asteroid2Sheet_18
+  - first:
+      213: 7716072723337910194
+    second: Asteroid2Sheet_19
+  - first:
+      213: -2072398442073834041
+    second: Asteroid2Sheet_20
+  - first:
+      213: 3655871856940384976
+    second: Asteroid2Sheet_21
+  - first:
+      213: 5656248306801572881
+    second: Asteroid2Sheet_22
+  - first:
+      213: -7896833966683115776
+    second: Asteroid2Sheet_23
+  - first:
+      213: 5902319381123777980
+    second: Asteroid2Sheet_24
+  - first:
+      213: 5292700734296956639
+    second: Asteroid2Sheet_25
+  - first:
+      213: -9099637844509632
+    second: Asteroid2Sheet_26
+  - first:
+      213: 689501321239609490
+    second: Asteroid2Sheet_27
+  - first:
+      213: -8122372993689079611
+    second: Asteroid2Sheet_28
+  - first:
+      213: -8170930784020181596
+    second: Asteroid2Sheet_29
+  - first:
+      213: 4926381507771368789
+    second: Asteroid2Sheet_30
+  - first:
+      213: -8967745550222081615
+    second: Asteroid2Sheet_31
+  - first:
+      213: 4201678881952193651
+    second: Asteroid2Sheet_32
+  - first:
+      213: 2381146889893308014
+    second: Asteroid2Sheet_33
+  - first:
+      213: 4368660108518988498
+    second: Asteroid2Sheet_34
+  - first:
+      213: -5261234851486099836
+    second: Asteroid2Sheet_35
+  - first:
+      213: 8820154406997985684
+    second: Asteroid2Sheet_36
+  - first:
+      213: -1968960112953405853
+    second: Asteroid2Sheet_37
+  - first:
+      213: -6335356437072904937
+    second: Asteroid2Sheet_38
+  - first:
+      213: -1368892974700859962
+    second: Asteroid2Sheet_39
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Asteroid2Sheet_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 1024
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2da2194824c7b3af0800000000000000
+      internalID: -415601915467846958
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_1
+      rect:
+        serializedVersion: 2
+        x: 512
+        y: 1024
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f09f9512e83066e10800000000000000
+      internalID: 2190442177742108943
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_2
+      rect:
+        serializedVersion: 2
+        x: 1024
+        y: 1024
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4870be736580ae500800000000000000
+      internalID: 426162281138292612
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_3
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 512
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1789535de70ec85d0800000000000000
+      internalID: -3058823211543848847
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_4
+      rect:
+        serializedVersion: 2
+        x: 512
+        y: 512
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ae24010558daa8810800000000000000
+      internalID: 1768416591781839594
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_5
+      rect:
+        serializedVersion: 2
+        x: 1024
+        y: 512
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 23a754a5c8dc24290800000000000000
+      internalID: -7907531993015551438
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_6
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 49628f34eb0bdfa30800000000000000
+      internalID: 4250747954538227348
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_7
+      rect:
+        serializedVersion: 2
+        x: 512
+        y: 0
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5559fc3b3324149e0800000000000000
+      internalID: -1638955999558658731
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Asteroid2Sheet_8
+      rect:
+        serializedVersion: 2
+        x: 1024
+        y: 0
+        width: 512
+        height: 512
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f7900d4cd390b9d40800000000000000
+      internalID: 5592073523210226047
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: dcee3a32f4fa0c440820ab0a4f94c4f5
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":512.0,"y":512.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":1,"keepEmptyRects":true,"isAlternate":false}'
+    nameFileIdTable:
+      Asteroid2Sheet_0: -415601915467846958
+      Asteroid2Sheet_1: 2190442177742108943
+      Asteroid2Sheet_2: 426162281138292612
+      Asteroid2Sheet_3: -3058823211543848847
+      Asteroid2Sheet_4: 1768416591781839594
+      Asteroid2Sheet_5: -7907531993015551438
+      Asteroid2Sheet_6: 4250747954538227348
+      Asteroid2Sheet_7: -1638955999558658731
+      Asteroid2Sheet_8: 5592073523210226047
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
