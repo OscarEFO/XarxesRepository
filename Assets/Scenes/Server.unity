@@ -2841,6 +2841,10 @@ MonoBehaviour:
   projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
   projectileSpeed: 10
   projectileLifetime: 3
+  asteroidPrefab: {fileID: 3954008476812946813, guid: 883733e2aff3c6a4a858082a6b881beb, type: 3}
+  asteroidSpeed: 2
+  asteroidLifetime: 10
+  asteroidSpawnInterval: 3
 --- !u!4 &1604730398
 Transform:
   m_ObjectHideFlags: 0

@@ -12,106 +12,104 @@ public class ServerUDP : MonoBehaviour
     private Socket serverSocket;
     private Thread receiveThread;
     private Thread sendThread;
-    private bool running = false;
+    private volatile bool running = false;
 
     public int port = 9050;
 
-    [Header("Scene Objects")]
-    public GameObject serverPlayer;       // player local on server (applyMovementLocally = true)
-    public GameObject remoteClientPlayer; // representation of client player on server
+    public GameObject serverPlayer;
+    public GameObject remoteClientPlayer;
 
-    [Header("Projectiles")]
     public GameObject projectilePrefab;
     public float projectileSpeed = 10f;
     public float projectileLifetime = 3f;
 
-    // authoritative positions
+    public GameObject asteroidPrefab;
+    public float asteroidSpeed = 2f;
+    public float asteroidLifetime = 10f;
+    public float asteroidSpawnInterval = 3f;
+
+    private float asteroidTimer = 0f;
+
     private volatile float client_x = 0f, client_y = 0f;
     private volatile float server_x = 0f, server_y = 0f;
 
-    // last input vector from client (updated in receive thread)
     private volatile float clientInputX = 0f, clientInputY = 0f;
 
-    // queue of shoot requests (thread-safe)
     private ConcurrentQueue<ShootRequest> shootQueue = new ConcurrentQueue<ShootRequest>();
 
-    // last client endpoint (to send snapshots/spawns)
     private volatile EndPoint lastClientEP = null;
 
-    // autoritativos del servidor
     private volatile float server_rot = 0f;
-
-    // ultimo rot enviado por cliente
     private volatile float client_rot = 0f;
 
     void Start()
     {
-        if (serverPlayer == null || remoteClientPlayer == null)
-        {
-            Debug.LogError("[SERVER] Assign serverPlayer and remoteClientPlayer!");
-            return;
-        }
-
         StartServer();
     }
 
     void Update()
     {
-        // serverPlayer is moved locally by PlayerMovement (applyMovementLocally = true)
-        server_x = serverPlayer.transform.position.x;
-        server_y = serverPlayer.transform.position.y;
+        if (serverPlayer != null)
+        {
+            server_x = serverPlayer.transform.position.x;
+            server_y = serverPlayer.transform.position.y;
+            server_rot = serverPlayer.transform.eulerAngles.z;
+        }
 
-        // Apply client's authoritative input to the client's official position
-        // Move client according to input (server authoritative simulation)
-        float speed = serverPlayer.GetComponent<PlayerMovement>()?.speed ?? 3f;
+        float speed = serverPlayer?.GetComponent<PlayerMovement>()?.speed ?? 3f;
         Vector2 input = new Vector2(clientInputX, clientInputY);
+
         client_x += input.x * speed * Time.deltaTime;
         client_y += input.y * speed * Time.deltaTime;
 
-        // Update the visual representation on server
-        remoteClientPlayer.transform.position =
-    Vector3.Lerp(remoteClientPlayer.transform.position,
-                 new Vector3(client_x, client_y, 0f),
-                 10f * Time.deltaTime);
-        remoteClientPlayer.transform.rotation =
-    Quaternion.Lerp(remoteClientPlayer.transform.rotation,
+        if (remoteClientPlayer != null)
+        {
+            remoteClientPlayer.transform.position =
+                Vector3.Lerp(remoteClientPlayer.transform.position,
+                    new Vector3(client_x, client_y, 0f),
+                    10f * Time.deltaTime);
+
+            remoteClientPlayer.transform.rotation =
+                Quaternion.Lerp(remoteClientPlayer.transform.rotation,
                     Quaternion.Euler(0, 0, client_rot),
                     10f * Time.deltaTime);
-        server_rot = serverPlayer.transform.eulerAngles.z;
+        }
 
-        // Process pending shoot requests (spawn into server world and notify client)
         while (shootQueue.TryDequeue(out ShootRequest req))
         {
-            // Spawn authoritative projectile on server main thread
-            SpawnProjectileOnServer(new Vector2(req.x, req.y), req.rotationZ, new Vector2(req.dirX, req.dirY));
-            // Notify client so it instantiates a replica
-            SendSpawnToClient(lastClientEP, new Vector2(req.x, req.y), req.rotationZ, new Vector2(req.dirX, req.dirY), projectileSpeed);
+            SpawnProjectileOnServer(new Vector2(req.x, req.y),
+                                    req.rotationZ,
+                                    new Vector2(req.dirX, req.dirY));
+
+            SendSpawnToClient(lastClientEP,
+                new Vector2(req.x, req.y),
+                req.rotationZ,
+                new Vector2(req.dirX, req.dirY),
+                projectileSpeed);
+        }
+
+        asteroidTimer += Time.deltaTime;
+        if (asteroidTimer >= asteroidSpawnInterval)
+        {
+            asteroidTimer = 0f;
+            SpawnAsteroid();
         }
     }
 
     void StartServer()
     {
-        try
-        {
-            serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            serverSocket.Bind(new IPEndPoint(IPAddress.Any, port));
+        serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        serverSocket.Bind(new IPEndPoint(IPAddress.Any, port));
 
-            running = true;
+        running = true;
 
-            receiveThread = new Thread(ReceiveLoop);
-            receiveThread.IsBackground = true;
-            receiveThread.Start();
+        receiveThread = new Thread(ReceiveLoop) { IsBackground = true };
+        receiveThread.Start();
 
-            sendThread = new Thread(SnapshotLoop);
-            sendThread.IsBackground = true;
-            sendThread.Start();
+        sendThread = new Thread(SnapshotLoop) { IsBackground = true };
+        sendThread.Start();
 
-            Debug.Log("[SERVER] UDP listening on port " + port);
-        }
-        catch (Exception e)
-        {
-            Debug.LogError("[SERVER] Error starting: " + e.Message);
-        }
+        Debug.Log("[SERVER] UDP listening on port " + port);
     }
 
     void ReceiveLoop()
@@ -124,84 +122,130 @@ public class ServerUDP : MonoBehaviour
             try
             {
                 int received = serverSocket.ReceiveFrom(buffer, ref clientEP);
+                if (received <= 0) { Thread.Sleep(1); continue; }
+
                 string msg = Encoding.UTF8.GetString(buffer, 0, received);
 
-                lastClientEP = clientEP;
-
-                // Determine message type quickly
-                if (msg.Contains("\"type\": \"input\"") || msg.Contains("\"input\"") && msg.Contains("ix"))
+                if (msg.Contains("\"handshake\""))
                 {
-                    // parse input vector
-                    float ix = ExtractFloat(msg, "ix");
-                    float iy = ExtractFloat(msg, "iy");
-                    float rot = ExtractFloat(msg, "rot");
-
-                    clientInputX = ix;
-                    clientInputY = iy;
-                    client_rot = rot;
+                    lastClientEP = clientEP;
+                    Debug.Log("[SERVER] Handshake received, client endpoint saved.");
                 }
-                else if (msg.Contains("\"type\": \"shoot\"") || msg.Contains("\"shoot\""))
-                {
-                    float x = ExtractFloat(msg, "x");
-                    float y = ExtractFloat(msg, "y");
-                    float rotationZ = ExtractFloat(msg, "rotationZ");
-                    float dirX = ExtractFloat(msg, "dirX");
-                    float dirY = ExtractFloat(msg, "dirY");
 
-                    // enqueue to be processed on main thread
-                    ShootRequest req = new ShootRequest { x = x, y = y, rotationZ = rotationZ, dirX = dirX, dirY = dirY };
+                if (msg.Contains("\"type\": \"input\""))
+                {
+                    lastClientEP = clientEP;
+                    clientInputX = ExtractFloat(msg, "ix");
+                    clientInputY = ExtractFloat(msg, "iy");
+                    client_rot = ExtractFloat(msg, "rot");
+                }
+                else if (msg.Contains("\"type\": \"shoot\""))
+                {
+                    lastClientEP = clientEP;
+
+                    ShootRequest req = new ShootRequest
+                    {
+                        x = ExtractFloat(msg, "x"),
+                        y = ExtractFloat(msg, "y"),
+                        rotationZ = ExtractFloat(msg, "rotationZ"),
+                        dirX = ExtractFloat(msg, "dirX"),
+                        dirY = ExtractFloat(msg, "dirY")
+                    };
+
                     shootQueue.Enqueue(req);
                 }
-                else if (msg.Contains("\"type\": \"playerState\""))
-                {
-                    // ignore: old mode; we operate on input-only
-                }
             }
-            catch (Exception) { }
+            catch (SocketException)
+            {
+                if (!running) break;
+            }
+            catch (Exception)
+            {
+                // ignore and continue
+            }
+
+            Thread.Sleep(1);
         }
     }
 
-    // Create projectile in server scene (main thread)
     void SpawnProjectileOnServer(Vector2 position, float rotationZ, Vector2 direction)
     {
         if (projectilePrefab == null) return;
-        GameObject proj = Instantiate(projectilePrefab, new Vector3(position.x, position.y, 0f), Quaternion.Euler(0, 0, rotationZ));
+
+        GameObject proj = Instantiate(projectilePrefab,
+            new Vector3(position.x, position.y, 0f),
+            Quaternion.Euler(0, 0, rotationZ));
+
         Rigidbody2D rb = proj.GetComponent<Rigidbody2D>();
         if (rb != null) rb.linearVelocity = direction.normalized * projectileSpeed;
+
         Destroy(proj, projectileLifetime);
     }
 
-    void SendSpawnToClient(EndPoint clientEP, Vector2 position, float rotationZ, Vector2 direction, float speed)
+    void SpawnAsteroid()
     {
-        if (clientEP == null) return;
+        float radius = 12f;
+        Vector2 spawnPos = UnityEngine.Random.insideUnitCircle.normalized * radius;
+        Vector2 dir = (Vector2.zero - spawnPos).normalized;
+
+        if (asteroidPrefab != null)
+        {
+            GameObject ast = Instantiate(asteroidPrefab, spawnPos, Quaternion.identity);
+            Rigidbody2D rb = ast.GetComponent<Rigidbody2D>();
+            if (rb != null) rb.linearVelocity = dir * asteroidSpeed;
+            Destroy(ast, asteroidLifetime);
+        }
+
+        SendAsteroidSpawn(lastClientEP, spawnPos, dir, asteroidSpeed);
+    }
+
+    void SendAsteroidSpawn(EndPoint ep, Vector2 pos, Vector2 dir, float speed)
+    {
+        if (ep == null) return;
 
         string json =
-            "{ \"type\": \"spawnProjectile\", " +
-            "\"x\": " + position.x.ToString(CultureInfo.InvariantCulture) + ", " +
-            "\"y\": " + position.y.ToString(CultureInfo.InvariantCulture) + ", " +
-            "\"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + ", " +
-            "\"dirX\": " + direction.x.ToString(CultureInfo.InvariantCulture) + ", " +
-            "\"dirY\": " + direction.y.ToString(CultureInfo.InvariantCulture) + ", " +
+            "{ \"type\": \"spawnAsteroid\", " +
+            "\"x\": " + pos.x.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"y\": " + pos.y.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"dirX\": " + dir.x.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"dirY\": " + dir.y.ToString(CultureInfo.InvariantCulture) + ", " +
             "\"speed\": " + speed.ToString(CultureInfo.InvariantCulture) +
             " }";
 
-        try
-        {
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            serverSocket.SendTo(data, data.Length, SocketFlags.None, clientEP);
-        }
-        catch (Exception) { }
+        byte[] data = Encoding.UTF8.GetBytes(json);
+        serverSocket.SendTo(data, data.Length, SocketFlags.None, ep);
+    }
+
+    void SendSpawnToClient(EndPoint ep, Vector2 pos, float rotationZ, Vector2 dir, float speed)
+    {
+        if (ep == null) return;
+
+        string json =
+            "{ \"type\": \"spawnProjectile\", " +
+            "\"x\": " + pos.x.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"y\": " + pos.y.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"dirX\": " + dir.x.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"dirY\": " + dir.y.ToString(CultureInfo.InvariantCulture) + ", " +
+            "\"speed\": " + speed.ToString(CultureInfo.InvariantCulture) +
+            " }";
+
+        byte[] data = Encoding.UTF8.GetBytes(json);
+        serverSocket.SendTo(data, data.Length, SocketFlags.None, ep);
     }
 
     float ExtractFloat(string json, string key)
     {
         int idx = json.IndexOf("\"" + key + "\":");
         if (idx == -1) return 0f;
+
         int start = idx + key.Length + 3;
         int end = json.IndexOfAny(new char[] { ',', '}' }, start);
-        string value = json.Substring(start, end - start).Trim();
-        if (value == "") return 0f;
-        return float.Parse(value, CultureInfo.InvariantCulture);
+        if (end == -1) end = json.Length;
+        string v = json.Substring(start, end - start).Trim();
+        if (string.IsNullOrEmpty(v)) return 0f;
+        float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float result);
+        return result;
     }
 
     void SnapshotLoop()
@@ -225,21 +269,41 @@ public class ServerUDP : MonoBehaviour
                     serverSocket.SendTo(data, data.Length, SocketFlags.None, lastClientEP);
                 }
             }
-            catch (Exception) { }
+            catch (Exception)
+            {
+                // ignore
+            }
 
-            Thread.Sleep(20); // 50 Hz
+            Thread.Sleep(20); // 50Hz snapshot
         }
     }
 
     void OnApplicationQuit()
     {
         running = false;
-        try { receiveThread?.Abort(); } catch { }
-        try { sendThread?.Abort(); } catch { }
+        try
+        {
+            if (receiveThread != null && receiveThread.IsAlive)
+            {
+                receiveThread.Join(200);
+                if (receiveThread.IsAlive) receiveThread.Abort();
+            }
+        }
+        catch { }
+
+        try
+        {
+            if (sendThread != null && sendThread.IsAlive)
+            {
+                sendThread.Join(200);
+                if (sendThread.IsAlive) sendThread.Abort();
+            }
+        }
+        catch { }
+
         try { serverSocket?.Close(); } catch { }
     }
 
-    // simple container
     private struct ShootRequest
     {
         public float x, y, rotationZ, dirX, dirY;
