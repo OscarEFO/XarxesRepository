@@ -1768,7 +1768,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 57410b055933e4b4aae1107725755cd1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkShootingClient
-  projectilePrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
+  clientProjectilePrefab: {fileID: 356683303254194531, guid: 2dcebfcf9c009ee4ba22641e4866f5da, type: 3}
+  serverProjectilePrefab: {fileID: 356683303254194531, guid: 2dcebfcf9c009ee4ba22641e4866f5da, type: 3}
 --- !u!4 &1283613829
 Transform:
   m_ObjectHideFlags: 0

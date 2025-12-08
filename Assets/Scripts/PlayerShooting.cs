@@ -4,50 +4,63 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(PlayerMovement))]
 public class PlayerShooting : MonoBehaviour
 {
-    [Header("Spawn Settings")]
     public Transform firePoint;
     public float rotationOffset = -90f;
     public float fireRate = 0.25f;
-    private float nextFireTime = 0f;
 
+    private float nextFireTime = 0f;
     private Camera mainCam;
+    private PlayerMovement pm;
 
     void Start()
     {
         mainCam = Camera.main;
-        if (mainCam == null) Debug.LogError("[PlayerShooting] Main Camera not found");
+        pm = GetComponent<PlayerMovement>();
+
+        if (!mainCam)
+            Debug.LogError("[PlayerShooting] No Camera found");
     }
 
     void Update()
     {
         if (Mouse.current == null) return;
 
+        // Rotate to mouse
         Vector3 mousePos = mainCam.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-        mousePos.z = 0f;
+        mousePos.z = 0;
 
-        Vector3 direction = (mousePos - transform.position).normalized;
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        transform.rotation = Quaternion.Euler(0f, 0f, angle + rotationOffset);
+        Vector3 dir = (mousePos - transform.position).normalized;
+        float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+        transform.rotation = Quaternion.Euler(0, 0, angle + rotationOffset);
 
+        // Fire
         if (Mouse.current.leftButton.isPressed && Time.time >= nextFireTime)
         {
             nextFireTime = Time.time + fireRate;
-            RequestShoot();
+            Shoot();
         }
     }
 
-    void RequestShoot()
+    void Shoot()
     {
-        if (NetworkShootingClient.Instance == null)
-            return;
-
-        if (firePoint == null)
-            return;
+        if (firePoint == null) return;
 
         Vector2 pos = firePoint.position;
         float rotZ = transform.eulerAngles.z;
-        Vector2 dir = transform.up; // direction vector
+        Vector2 dir = transform.up;
 
-        NetworkShootingClient.Instance.RequestSpawn(pos, rotZ, dir);
+        if (pm.applyMovementLocally == true)
+        {
+
+            ServerUDP server = FindObjectOfType<ServerUDP>();
+            if (server != null)
+                server.EnqueueServerShot(pos, rotZ, dir);
+        }
+        else
+        {
+            // --- CLIENT SHOOTING (original) ---
+            if (NetworkShootingClient.Instance != null)
+                NetworkShootingClient.Instance.RequestSpawn(pos, rotZ, dir);
+        }
     }
 }

@@ -5,8 +5,9 @@ public class NetworkShootingClient : MonoBehaviour
 {
     public static NetworkShootingClient Instance { get; private set; }
 
-    [Header("Projectile prefab (client-side replica)")]
-    public GameObject projectilePrefab;
+    [Header("Projectile prefabs")]
+    public GameObject clientProjectilePrefab;    // prefab del cliente
+    public GameObject serverProjectilePrefab;    // para proyectiles que llegan del server
 
     // queue populated by ClientUDP.ReceiveLoop (thread) — consumed in Update on main thread
     private ConcurrentQueue<SpawnInfo> spawnQueue = new ConcurrentQueue<SpawnInfo>();
@@ -39,9 +40,20 @@ public class NetworkShootingClient : MonoBehaviour
 
     void InstantiateProjectileLocal(SpawnInfo info)
     {
-        if (projectilePrefab == null) return;
+        GameObject prefabToUse;
 
-        GameObject proj = Instantiate(projectilePrefab, new Vector3(info.x, info.y, 0f), Quaternion.Euler(0f, 0f, info.rotationZ));
+        // Si el disparo viene del servidor, usamos su prefab
+        if (info.fromServer)
+            prefabToUse = serverProjectilePrefab != null ? serverProjectilePrefab : clientProjectilePrefab;
+        else
+            prefabToUse = clientProjectilePrefab;
+
+        if (prefabToUse == null) return;
+
+        GameObject proj = Instantiate(prefabToUse,
+            new Vector3(info.x, info.y, 0f),
+            Quaternion.Euler(0f, 0f, info.rotationZ));
+
         Rigidbody2D rb = proj.GetComponent<Rigidbody2D>();
         if (rb != null)
             rb.linearVelocity = new Vector2(info.dirX, info.dirY).normalized * info.speed;
@@ -53,5 +65,6 @@ public class NetworkShootingClient : MonoBehaviour
         public float rotationZ;
         public float dirX, dirY;
         public float speed;
+        public bool fromServer;
     }
 }
