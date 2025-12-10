@@ -1,5 +1,8 @@
 # NetworkRepository
  
+ Github Link: https://github.com/OscarEFO/XarxesRepository
+ - The current project is located in the branch NewARCH
+
 Repository for Network subject by:
 - Pau Vivas
 - Sergio Garriguez
@@ -12,5 +15,5 @@ Replication manager is included in the server in the ServerUDP and ClientManager
 The system supports 2 clients with the player1 and player 2 connecting, recieving each other's packets and replicating each other's states. 
 And finally the communication is done using UDP simulated connections.
 
-The game currently has a bug where the names are not properly put in the two players, player 1 is put under that name but player 2 defaults to the generic name "User" instead of player 2.
+The game currently has a bug where the names are not properly put in the two players, at the main menu you have the option of naming the player but that is currently unused, player 1 is put under the name "Player1" name but player 2 defaults to the generic name "User" instead of "Player2".
 GitHub link: https://github.com/OscarEFO/XarxesRepository.git
