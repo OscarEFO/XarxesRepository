@@ -138,28 +138,57 @@ public class ServerManagerUDP : MonoBehaviour
                 break;
         }
     }
-
     void HandleCreateOrUpdate(Packet.Packet pReader, Packet.Packet pWriter, EndPoint remote)
     {
         Packet.ShipDataPacket dsData = pReader.DeserializeShipDataPacket();
         string key = $"{remote}:{dsData.id}";
 
-        bool created = false;
-        if (!connectedClients.ContainsKey(key))
+        bool isNew = !connectedClients.ContainsKey(key);
+
+        if (isNew)
         {
-            created = true;
             connectedClients[key] = new UserData(remote, dsData, 50);
-            Debug.Log($"New player added: {dsData.name} '{dsData.id}' from {remote}");
+            Debug.Log($"New player connected: {dsData.name} ({dsData.id})");
+
+            SendExistingPlayersToNewClient(remote);
+
+            BroadcastCreateOfNewPlayer(dsData, remote);
         }
         else
         {
-            // Predict position using stored MS, then update
-            dsData.pos = PredictPositionWithMS(dsData.pos, dsData.vel, connectedClients[key].ms);
             connectedClients[key].data = dsData;
         }
 
-        pWriter.Serialize(created ? Packet.Packet.PacketType.CREATE : Packet.Packet.PacketType.UPDATE, dsData);
+        pWriter.Serialize(isNew ? Packet.Packet.PacketType.CREATE :
+                                Packet.Packet.PacketType.UPDATE, dsData);
     }
+    void SendExistingPlayersToNewClient(EndPoint remoteNewClient)
+    {
+        foreach (var client in connectedClients.Values)
+        {
+            Packet.Packet p = new Packet.Packet();
+            p.Start();
+            p.Serialize(Packet.Packet.PacketType.CREATE, client.data);
+            Send(remoteNewClient, p);
+            p.Close();
+        }
+    }
+    void BroadcastCreateOfNewPlayer(Packet.ShipDataPacket newPlayerData, EndPoint sender)
+    {
+        foreach (var client in connectedClients.Values)
+        {
+            if (!client.ep.Equals(sender))
+            {
+                Packet.Packet p = new Packet.Packet();
+                p.Start();
+                p.Serialize(Packet.Packet.PacketType.CREATE, newPlayerData);
+                Send(client.ep, p);
+                p.Close();
+            }
+        }
+    }
+
+
 
     void HandleDelete(Packet.Packet pReader, Packet.Packet pWriter, EndPoint remote)
     {
@@ -190,7 +219,7 @@ public class ServerManagerUDP : MonoBehaviour
     {
         msPacket = true;
         Packet.MSCheckerDataPacket dsData = pReader.DeserializeMSCheckerDataPacket();
-        string key = $"{remote}:{dsData.id}";
+        string key = dsData.id.ToString();
 
         if (connectedClients.ContainsKey(key))
         {

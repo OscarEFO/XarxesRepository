@@ -1,56 +1,219 @@
+using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class ServerUDP : MonoBehaviour
 {
-    Socket socket;
-    Dictionary<EndPoint, int> users = new Dictionary<EndPoint, int>();
-    bool running = false;
+    public int port = 9050;
+    public float snapshotRate = 0.05f; // 20Hz
 
-    public void StartServer(int port = 9050)
+    private Socket socket;
+    private Thread thread;
+    private volatile bool running = false;
+
+    private class PlayerState
     {
-        IPEndPoint ipep = new IPEndPoint(System.Net.IPAddress.Any, port);
-        socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        socket.Bind(ipep);
-
-        running = true;
-        Thread th = new Thread(Receive);
-        th.Start();
-
-        Debug.Log("SERVER UDP started on port " + port);
+        public int id;
+        public string name;
+        public Vector2 pos;
+        public Vector2 vel;
+        public float rot;
+        public IPEndPoint ep;
     }
 
-    void Receive()
+    private readonly Dictionary<int, PlayerState> players = new Dictionary<int, PlayerState>();
+    private readonly Dictionary<string, IPEndPoint> endpoints = new Dictionary<string, IPEndPoint>();
+
+    void Start()
+    {
+        socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        socket.Bind(new IPEndPoint(IPAddress.Any, port));
+        socket.Blocking = false;
+
+        running = true;
+        thread = new Thread(ReceiveLoop);
+        thread.Start();
+
+        InvokeRepeating(nameof(BroadcastSnapshot), snapshotRate, snapshotRate);
+
+        Debug.Log($"[SERVER] Running on UDP:{port}");
+    }
+
+    void OnApplicationQuit()
+    {
+        running = false;
+        socket?.Close();
+    }
+
+    // --------------------------
+    // RECEIVE LOOP
+    // --------------------------
+    private void ReceiveLoop()
     {
         byte[] buffer = new byte[1024];
-        EndPoint remote = new IPEndPoint(System.Net.IPAddress.Any, 0);
+        EndPoint remote = new IPEndPoint(IPAddress.Any, port);
 
         while (running)
         {
             try
             {
-                int recv = socket.ReceiveFrom(buffer, ref remote);
+                int len = socket.ReceiveFrom(buffer, ref remote);
+                IPEndPoint ep = (IPEndPoint)remote;
 
-                if (!users.ContainsKey(remote))
-                    users.Add(remote, 0); // Solo registro de nuevo usuario
+                string key = ep.ToString();
+                if (!endpoints.ContainsKey(key))
+                    endpoints[key] = ep;
 
-                // Reenvío simple a todos los demás
-                foreach (var u in users)
-                {
-                    if (!u.Key.Equals(remote))
-                        socket.SendTo(buffer, 0, recv, SocketFlags.None, u.Key);
-                }
+                ParsePacket(buffer, len, ep);
             }
-            catch { }
+            catch (SocketException)
+            {
+                Thread.Sleep(1);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[SERVER ERROR] " + e);
+            }
         }
     }
 
-    private void OnApplicationQuit()
+    // --------------------------
+    // PACKET PARSER
+    // --------------------------
+    private void ParsePacket(byte[] buf, int len, IPEndPoint ep)
     {
-        running = false;
-        socket?.Close();
+        int o = 0;
+        byte type = buf[o++];
+
+        switch (type)
+        {
+            case 0: HandleCreate(buf, ref o, ep); break;
+            case 1: HandleUpdate(buf, ref o, ep); break;
+            case 2: HandleShoot(buf, ref o, ep); break;
+        }
+    }
+
+    private void HandleCreate(byte[] buf, ref int o, IPEndPoint ep)
+    {
+        int id = BitConverter.ToInt32(buf, o); o += 4;
+        string name = ReadString(buf, ref o);
+        float x = BitConverter.ToSingle(buf, o); o += 4;
+        float y = BitConverter.ToSingle(buf, o); o += 4;
+
+        players[id] = new PlayerState
+        {
+            id = id,
+            name = name,
+            pos = new Vector2(x, y),
+            vel = Vector2.zero,
+            rot = 0,
+            ep = ep
+        };
+
+        Debug.Log($"[SERVER] CREATE {name} ({id})");
+
+        BroadcastCreate(players[id]);
+    }
+
+    private void HandleUpdate(byte[] buf, ref int o, IPEndPoint ep)
+    {
+        int id = BitConverter.ToInt32(buf, o); o += 4;
+        if (!players.ContainsKey(id)) return;
+
+        var p = players[id];
+        p.pos.x = BitConverter.ToSingle(buf, o); o += 4;
+        p.pos.y = BitConverter.ToSingle(buf, o); o += 4;
+        p.vel.x = BitConverter.ToSingle(buf, o); o += 4;
+        p.vel.y = BitConverter.ToSingle(buf, o); o += 4;
+        p.rot = BitConverter.ToSingle(buf, o); o += 4;
+    }
+
+    private void HandleShoot(byte[] buf, ref int o, IPEndPoint ep)
+    {
+        int id = BitConverter.ToInt32(buf, o); o += 4;
+        float ox = BitConverter.ToSingle(buf, o); o += 4;
+        float oy = BitConverter.ToSingle(buf, o); o += 4;
+        float dx = BitConverter.ToSingle(buf, o); o += 4;
+        float dy = BitConverter.ToSingle(buf, o); o += 4;
+
+        BroadcastShoot(id, ox, oy, dx, dy);
+    }
+
+    // --------------------------
+    // BROADCAST FUNCTIONS
+    // --------------------------
+    private void BroadcastSnapshot()
+    {
+        foreach (var kv in players)
+            BroadcastCreate(kv.Value); // using create/update for simplicity
+    }
+
+    private void BroadcastCreate(PlayerState p)
+    {
+        foreach (var ep in endpoints.Values)
+        {
+            socket.SendTo(BuildCreatePacket(p), ep);
+        }
+    }
+
+    private void BroadcastShoot(int id, float ox, float oy, float dx, float dy)
+    {
+        foreach (var ep in endpoints.Values)
+            socket.SendTo(BuildShootPacket(id, ox, oy, dx, dy), ep);
+    }
+
+    // --------------------------
+    // PACKET BUILDERS
+    // --------------------------
+    private byte[] BuildCreatePacket(PlayerState p)
+    {
+        var ms = new System.IO.MemoryStream();
+        var w = new System.IO.BinaryWriter(ms);
+
+        w.Write((byte)0);      // CREATE
+        w.Write(p.id);
+        WriteString(w, p.name);
+        w.Write(p.pos.x);
+        w.Write(p.pos.y);
+        w.Write(p.vel.x);
+        w.Write(p.vel.y);
+        w.Write(p.rot);
+
+        return ms.ToArray();
+    }
+
+    private byte[] BuildShootPacket(int id, float ox, float oy, float dx, float dy)
+    {
+        var ms = new System.IO.MemoryStream();
+        var w = new System.IO.BinaryWriter(ms);
+
+        w.Write((byte)2); // SHOOT
+        w.Write(id);
+        w.Write(ox);
+        w.Write(oy);
+        w.Write(dx);
+        w.Write(dy);
+
+        return ms.ToArray();
+    }
+
+    // --------------------------
+    // STRING HELPERS
+    // --------------------------
+    private void WriteString(System.IO.BinaryWriter w, string s)
+    {
+        w.Write((short)s.Length);
+        w.Write(System.Text.Encoding.UTF8.GetBytes(s));
+    }
+
+    private string ReadString(byte[] buf, ref int o)
+    {
+        short len = BitConverter.ToInt16(buf, o); o += 2;
+        string s = System.Text.Encoding.UTF8.GetString(buf, o, len);
+        o += len;
+        return s;
     }
 }

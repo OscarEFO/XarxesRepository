@@ -41,8 +41,7 @@ public class ClientServerInfo : MonoBehaviour
 
         if (clientScript != null)
         {
-            clientScript.userName = userName;
-            clientScript.serverIP = serverIP;
+
         }
         else
         {
@@ -55,8 +54,7 @@ public class ClientServerInfo : MonoBehaviour
     {
         if (client != null)
         {
-            client.userName = userName;
-            client.serverIP = serverIP;
+
         }
     }
 }

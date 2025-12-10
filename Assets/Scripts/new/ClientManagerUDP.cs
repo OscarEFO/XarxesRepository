@@ -1,57 +1,97 @@
-﻿using System.Net;
-using System.Net.Sockets;
-using UnityEngine;
-using System.Threading;
+﻿using System;
 using System.Collections.Generic;
-using System;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+using UnityEngine;
 
+/// <summary>
+/// ClientManagerUDP - lightweight client networking compatible with the simple ServerUDP protocol:
+/// Packet layout:
+/// [byte] PacketType
+/// Create(0): [int id][short nameLen][name bytes][float x][float y][float velX][float velY][float rot]
+/// Update(1): [int id][float x][float y][float velX][float velY][float rot]
+/// Shoot (2): [int id][float originX][float originY][float dirX][float dirY]
+/// </summary>
 public class ClientManagerUDP : MonoBehaviour
 {
-    // ---------------- NETWORK ----------------
-    Socket socket;
-    IPEndPoint serverEndPoint;
-
-    Packet.Packet pReader;
-    Packet.Packet pWriter;
-
+    [Header("Connection")]
+    public string userName = "Player";
     public string serverIP = "127.0.0.1";
     public int serverPort = 9050;
-    public string userName = "Player";
 
-    // ---------------- PLAYER ----------------
+    [Header("Prefabs")]
     public GameObject playerPrefab;
-    public Transform playersParent;
+    public GameObject bulletPrefab;
+    public float bulletSpeed = 15f;
 
-    public Dictionary<int, Player> players = new Dictionary<int, Player>(); // ID Player
-    private Player localPlayer;
+    // Networking
+    private Socket socket;
+    private IPEndPoint serverEndPoint;
+    private Thread receiveThread;
+    private volatile bool running = false;
 
-    // ---------------- UPDATES ----------------
-    public float updateRate = 0.05f;
-    private float updateTimer;
+    // Local player
+    public Player localPlayer;
+    private int localId;
 
-    // ---------------- MS CHECK ----------------
-    public short ms = 0;
-    private float msSendTimer = 0f;
-    private float msCalcTimer = 0f;
-    private bool calculatingMS = false;
+    // Remote players
+    private readonly Dictionary<int, Player> players = new Dictionary<int, Player>();
+    private readonly object playersLock = new object();
 
-    // ---------------- THREAD ----------------
-    private volatile bool running = true;
-    private Queue<Action> mainThreadActions = new Queue<Action>();
-
-
-    // ============================================================
-    // START
-    // ============================================================
     void Start()
     {
-        pReader = new Packet.Packet();
-        pWriter = new Packet.Packet();
+        if (ClientServerInfo.Instance != null)
+        {
+            if (!string.IsNullOrEmpty(ClientServerInfo.Instance.userName))
+                userName = ClientServerInfo.Instance.userName;
+            if (!string.IsNullOrEmpty(ClientServerInfo.Instance.serverIP))
+                serverIP = ClientServerInfo.Instance.serverIP;
+        }
 
-        userName = ClientServerInfo.Instance.userName;
-        serverIP = ClientServerInfo.Instance.serverIP;
+        serverEndPoint = new IPEndPoint(IPAddress.Parse(serverIP), serverPort);
 
-        StartClient();
+        localId = UnityEngine.Random.Range(100000, 999999);
+
+        SetupSocket();
+        StartReceiveThread();
+
+        SendCreate();
+
+        Debug.Log($"[CLIENT] Started localId={localId} userName='{userName}' server={serverIP}:{serverPort}");
+    }
+
+    void OnApplicationQuit() => Shutdown();
+    void OnDestroy() => Shutdown();
+
+    private void Shutdown()
+    {
+        running = false;
+        try { receiveThread?.Join(200); } catch { }
+        try { socket?.Close(); } catch { }
+        socket = null;
+    }
+
+    private void SetupSocket()
+    {
+        try
+        {
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Blocking = false;
+            serverEndPoint = new IPEndPoint(IPAddress.Parse(serverIP), serverPort);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("[CLIENT] Socket setup failed: " + e.Message);
+        }
+    }
+
+    private void StartReceiveThread()
+    {
+        running = true;
+        receiveThread = new Thread(ReceiveLoop);
+        receiveThread.IsBackground = true;
+        receiveThread.Start();
     }
 
     public void SetLocalPlayer(Player p)
@@ -60,281 +100,275 @@ public class ClientManagerUDP : MonoBehaviour
     }
 
 
-    // ============================================================
-    // MAIN THREAD QUEUE
-    // ============================================================
-    public void EnqueueMainThread(Action a)
+    public void SendCreate()
     {
-        lock (mainThreadActions)
-            mainThreadActions.Enqueue(a);
-    }
-
-    void Update()
-    {
-        // Execute queued actions
-        while (mainThreadActions.Count > 0)
+        try
         {
-            Action a;
-            lock (mainThreadActions)
-                a = mainThreadActions.Dequeue();
-            a?.Invoke();
+            using (var ms = new System.IO.MemoryStream())
+            using (var w = new System.IO.BinaryWriter(ms))
+            {
+                w.Write((byte)0);
+                w.Write(localId);
+                WriteString(w, userName);
+                w.Write(0f); // pos.x (inicial)
+                w.Write(0f); // pos.y
+                w.Write(0f); // vel.x
+                w.Write(0f); // vel.y
+                w.Write(0f); // rot
+
+                var data = ms.ToArray();
+                socket.SendTo(data, serverEndPoint);
+            }
+            Debug.Log($"[CLIENT] Sent CREATE id={localId} name='{userName}'");
         }
-
-        if (localPlayer == null) return;
-
-        // ================== MS CHECK ====================
-        msSendTimer += Time.deltaTime;
-        if (msSendTimer >= 1f)
+        catch (Exception e)
         {
-            SendMSCheck();
-            msSendTimer = 0f;
-        }
-        if (calculatingMS) msCalcTimer += Time.deltaTime;
-
-
-        // ================= UPDATE PACKETS =================
-        updateTimer += Time.deltaTime;
-        if (updateTimer >= updateRate)
-        {
-            SendUpdatePacket();
-            updateTimer = 0f;
+            Debug.LogWarning("[CLIENT] SendCreate failed: " + e.Message);
         }
     }
 
-    // ============================================================
-    // CONNECT
-    // ============================================================
-    public void StartClient()
+    public void SendUpdate(int id, Vector2 pos, float rot, Vector2 vel)
     {
-        serverEndPoint = new IPEndPoint(IPAddress.Parse(serverIP), serverPort);
-        socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        socket.Connect(serverEndPoint);
-        socket.Blocking = false;
+        try
+        {
+            using (var ms = new System.IO.MemoryStream())
+            using (var w = new System.IO.BinaryWriter(ms))
+            {
+                w.Write((byte)1); 
+                w.Write(id);
+                w.Write(pos.x);
+                w.Write(pos.y);
+                w.Write(vel.x);
+                w.Write(vel.y);
+                w.Write(rot);
 
-        Debug.Log("Client UDP started.");
-
-        // -------- SPAWN LOCAL PLAYER --------
-        GameObject obj = Instantiate(playerPrefab, playersParent);
-        Player p = obj.GetComponent<Player>();
-
-        int id = GenerateRandomID();
-        p.networkId = id;
-        p.userName = userName;
-        p.isLocalPlayer = true;
-
-        localPlayer = p;
-        players.Add(id, p);
-
-        // -------- SEND CREATE PACKET --------
-        SendCreatePacket(p);
-
-        Thread th = new Thread(ReceiveThread);
-        th.Start();
+                var data = ms.ToArray();
+                socket.SendTo(data, serverEndPoint);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[CLIENT] SendUpdate failed: " + e.Message);
+        }
     }
 
-
-    // ============================================================
-    // SEND PACKETS
-    // ============================================================
-    public void SendUpdate(int id, Vector2 pos, float rot, Vector2 vel, bool shooting)
+    public void SendShoot(int id, Vector2 origin, Vector2 direction)
     {
-        Packet.ShipDataPacket data = new Packet.ShipDataPacket(
-            id,
-            userName,
-            new System.Numerics.Vector2(pos.x, pos.y),
-            new System.Numerics.Vector2(vel.x, vel.y),
-            rot,
-            shooting ? 1 : 0
-        );
+        try
+        {
+            using (var ms = new System.IO.MemoryStream())
+            using (var w = new System.IO.BinaryWriter(ms))
+            {
+                w.Write((byte)2); 
+                w.Write(id);
+                w.Write(origin.x);
+                w.Write(origin.y);
+                w.Write(direction.x);
+                w.Write(direction.y);
 
-        pWriter.Serialize(Packet.Packet.PacketType.UPDATE, data);
-        Send();
+                var data = ms.ToArray();
+                socket.SendTo(data, serverEndPoint);
+            }
+            Debug.Log($"[CLIENT] Sent SHOOT id={id} dir={direction} origin={origin}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[CLIENT] SendShoot failed: " + e.Message);
+        }
     }
 
-    public void SendShoot(int id, Vector2 pos, Vector2 direction)
+    private void ReceiveLoop()
     {
-        Packet.ActionShootDataPacket data = new Packet.ActionShootDataPacket(
-            id,
-            new System.Numerics.Vector2(pos.x, pos.y),
-            new System.Numerics.Vector2(direction.x, direction.y)
-        );
-
-        pWriter.Serialize(Packet.Packet.PacketType.ACTION_SHOOT, data);
-        Send();
-    }
-
-    private void SendCreatePacket(Player p)
-    {
-        Packet.ShipDataPacket data = new Packet.ShipDataPacket(
-            p.networkId,
-            p.userName,
-            new System.Numerics.Vector2(p.transform.position.x, p.transform.position.y),
-            new System.Numerics.Vector2(0, 0),
-            p.transform.eulerAngles.z,
-            1
-        );
-
-        pWriter.Serialize(Packet.Packet.PacketType.CREATE, data);
-        Send();
-    }
-
-    private void SendUpdatePacket()
-    {
-        if (localPlayer == null) return;
-
-        Rigidbody2D rb = localPlayer.GetComponent<Rigidbody2D>();
-
-        SendUpdate(
-            localPlayer.networkId,
-            localPlayer.transform.position,
-            rb.rotation,
-            rb.linearVelocity,
-            false
-        );
-    }
-
-    private void SendMSCheck()
-    {
-        if (localPlayer == null) return;
-
-        pWriter.Serialize(Packet.Packet.PacketType.MSCHECKER,
-            new Packet.MSCheckerDataPacket(localPlayer.networkId, ms));
-
-        calculatingMS = true;
-        Send();
-    }
-
-    private void Send()
-    {
-        pWriter.Send(ref socket, serverEndPoint);
-        pWriter.Restart();
-    }
-
-
-    // ============================================================
-    // RECEIVE THREAD
-    // ============================================================
-    void ReceiveThread()
-    {
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[4096];
         EndPoint remote = new IPEndPoint(IPAddress.Any, 0);
 
         while (running)
         {
             try
             {
-                if (socket.Available > 0)
-                {
-                    int recv = socket.ReceiveFrom(buffer, ref remote);
-                    pReader.Restart(buffer);
-                    pReader.Start();
+                int recv = socket.ReceiveFrom(buffer, ref remote);
+                if (recv <= 0) { Thread.Sleep(1); continue; }
 
-                    int amt = pReader.DeserializeGetGameObjectsAmount();
+                byte[] data = new byte[recv];
+                Array.Copy(buffer, 0, data, 0, recv);
 
-                    for (int i = 0; i < amt; i++)
-                    {
-                        HandlePacketFromServer();
-                    }
-                }
-                else Thread.Sleep(1);
+                ParseIncomingPacket(data, (IPEndPoint)remote);
             }
-            catch { }
-            finally { pReader.Close(); }
-        }
-
-        Debug.Log("Receive thread stopped.");
-    }
-
-    void HandlePacketFromServer()
-    {
-        Packet.Packet.PacketType type = pReader.DeserializeGetType();
-
-        switch (type)
-        {
-            case Packet.Packet.PacketType.CREATE:
-            case Packet.Packet.PacketType.UPDATE:
-                {
-                    Packet.ShipDataPacket data = pReader.DeserializeShipDataPacket();
-                    EnqueueMainThread(() => ApplyShipData(data));
-                    break;
-                }
-
-            case Packet.Packet.PacketType.DELETE:
-                {
-                    Packet.DeleteDataPacket data = pReader.DeserializeDeleteDataPacket();
-                    EnqueueMainThread(() => DeletePlayer(data));
-                    break;
-                }
-
-            case Packet.Packet.PacketType.MSCHECKER:
-                {
-                    Packet.MSCheckerDataPacket data = pReader.DeserializeMSCheckerDataPacket();
-                    EnqueueMainThread(() => ReceiveMSCheck(data));
-                    break;
-                }
+            catch (SocketException)
+            {
+                Thread.Sleep(1);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[CLIENT] ReceiveLoop error: " + ex.Message);
+                Thread.Sleep(1);
+            }
         }
     }
 
-
-    // ============================================================
-    // HANDLE PACKETS
-    // ============================================================
-    private void ApplyShipData(Packet.ShipDataPacket d)
+    private void ParseIncomingPacket(byte[] buf, IPEndPoint sender)
     {
-        // Local player should not be moved by server
-        if (localPlayer != null && d.id == localPlayer.networkId)
-            return;
-
-        if (!players.ContainsKey(d.id))
+        try
         {
-            // CREATE remote player
-            GameObject obj = Instantiate(playerPrefab, playersParent);
-            Player p = obj.GetComponent<Player>();
-            p.networkId = d.id;
-            p.userName = d.name;
-            p.isLocalPlayer = false;
+            int o = 0;
+            if (buf.Length < 1) return;
+            byte type = buf[o++];
 
-            players.Add(d.id, p);
+            switch (type)
+            {
+                case 0: 
+                    {
+                        int id = BitConverter.ToInt32(buf, o); o += 4;
+                        string name = ReadString(buf, ref o);
+                        float x = BitConverter.ToSingle(buf, o); o += 4;
+                        float y = BitConverter.ToSingle(buf, o); o += 4;
+                        float velx = BitConverter.ToSingle(buf, o); o += 4;
+                        float vely = BitConverter.ToSingle(buf, o); o += 4;
+                        float rot = BitConverter.ToSingle(buf, o); o += 4;
+
+                        MainThreadDispatcher.Enqueue(() =>
+                        {
+                            SpawnOrUpdatePlayer(id, name, new Vector2(x, y), rot, new Vector2(velx, vely));
+                        });
+                    }
+                    break;
+
+                case 1: 
+                    {
+                        int id = BitConverter.ToInt32(buf, o); o += 4;
+                        float x = BitConverter.ToSingle(buf, o); o += 4;
+                        float y = BitConverter.ToSingle(buf, o); o += 4;
+                        float velx = BitConverter.ToSingle(buf, o); o += 4;
+                        float vely = BitConverter.ToSingle(buf, o); o += 4;
+                        float rot = BitConverter.ToSingle(buf, o); o += 4;
+
+                        MainThreadDispatcher.Enqueue(() =>
+                        {
+                            if (players.ContainsKey(id) && !players[id].isLocalPlayer)
+                                players[id].ApplyNetworkState(new Vector2(x, y), rot, new Vector2(velx, vely));
+                        });
+                    }
+                    break;
+
+                case 2: 
+                    {
+                        int id = BitConverter.ToInt32(buf, o); o += 4;
+                        float ox = BitConverter.ToSingle(buf, o); o += 4;
+                        float oy = BitConverter.ToSingle(buf, o); o += 4;
+                        float dx = BitConverter.ToSingle(buf, o); o += 4;
+                        float dy = BitConverter.ToSingle(buf, o); o += 4;
+
+                        MainThreadDispatcher.Enqueue(() =>
+                        {
+                            HandleIncomingShoot(id, new Vector2(ox, oy), new Vector2(dx, dy));
+                        });
+                    }
+                    break;
+
+                default:
+                    Debug.LogWarning("[CLIENT] Unknown packet type: " + type);
+                    break;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[CLIENT] ParseIncomingPacket error: " + e.Message);
+        }
+    }
+
+    private void SpawnOrUpdatePlayer(int id, string name, Vector2 pos, float rot, Vector2 vel)
+    {
+        bool isLocal = (id == localId);
+
+        lock (playersLock)
+        {
+            if (!players.ContainsKey(id))
+            {
+                if (playerPrefab == null)
+                {
+                    Debug.LogError("[CLIENT] playerPrefab missing");
+                    return;
+                }
+
+                GameObject go = Instantiate(playerPrefab, new Vector3(pos.x, pos.y, 0f), Quaternion.Euler(0, 0, rot));
+                go.name = $"Player_{id}";
+                Player p = go.GetComponent<Player>();
+                if (p == null)
+                {
+                    Debug.LogError("[CLIENT] playerPrefab has no Player script");
+                    Destroy(go);
+                    return;
+                }
+
+                p.networkId = id;
+                p.userName = name;
+                p.clientManager = this;
+                p.isLocalPlayer = isLocal;
+
+                if (p.tmp != null) p.tmp.SetText(name);
+
+                players[id] = p;
+
+                if (isLocal)
+                {
+                    localPlayer = p;
+                    Debug.Log($"[CLIENT] Local player spawned id={id} name='{name}'");
+                }
+                else
+                {
+                    Debug.Log($"[CLIENT] Remote player spawned id={id} name='{name}'");
+                }
+
+                return;
+            }
         }
 
-        Player ship = players[d.id];
-        ship.ApplyNetworkState(
-            new Vector2(d.pos.X, d.pos.Y),
-            d.rotation,
-            new Vector2(d.vel.X, d.vel.Y)
+        // update existing (skip local)
+        if (!isLocal)
+        {
+            players[id].ApplyNetworkState(pos, rot, vel);
+        }
+    }
+
+    private void HandleIncomingShoot(int shooterId, Vector2 origin, Vector2 direction)
+    {
+        if (bulletPrefab == null) return;
+
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
+        Quaternion rot = Quaternion.Euler(0, 0, angle);
+
+        GameObject b = Instantiate(
+            bulletPrefab,
+            new Vector3(origin.x, origin.y, 0f),
+            rot
         );
-    }
 
-    private void DeletePlayer(Packet.DeleteDataPacket d)
-    {
-        if (players.ContainsKey(d.id))
+        if (b.TryGetComponent<Rigidbody2D>(out var rb))
+            rb.linearVelocity = direction.normalized * bulletSpeed;
+
+        if (players.TryGetValue(shooterId, out var shooterPlayer))
         {
-            Destroy(players[d.id].gameObject);
-            players.Remove(d.id);
+            var bulletCol = b.GetComponent<Collider2D>();
+            var shooterCol = shooterPlayer.GetComponent<Collider2D>();
+            if (bulletCol != null && shooterCol != null)
+                Physics2D.IgnoreCollision(bulletCol, shooterCol);
         }
     }
 
-    private void ReceiveMSCheck(Packet.MSCheckerDataPacket d)
-    {
-        calculatingMS = false;
-        ms = (short)(msCalcTimer * 1000f);
-        msCalcTimer = 0f;
 
-        Debug.Log("MS: " + ms);
+    private static void WriteString(System.IO.BinaryWriter w, string s)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(s);
+        short len = (short)bytes.Length;
+        w.Write(len);
+        w.Write(bytes);
     }
 
-
-    // ============================================================
-    // UTILS
-    // ============================================================
-    public int GenerateRandomID()
+    private static string ReadString(byte[] buf, ref int o)
     {
-        return UnityEngine.Random.Range(10000000, 99999999);
-    }
-
-    private void OnDestroy()
-    {
-        running = false;
-        socket?.Close();
+        short len = BitConverter.ToInt16(buf, o); o += 2;
+        string s = System.Text.Encoding.UTF8.GetString(buf, o, len);
+        o += len;
+        return s;
     }
 }

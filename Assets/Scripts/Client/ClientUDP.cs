@@ -1,10 +1,8 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using UnityEngine;
-using System.Globalization;
 
 public class ClientUDP : MonoBehaviour
 {
@@ -18,16 +16,19 @@ public class ClientUDP : MonoBehaviour
     public string serverIP = "127.0.0.1";
     public int port = 9050;
 
-    // Estado recibido del servidor (lectura por NetworkPlayer)
+    // State from server
     public volatile float server_x, server_y;
     public volatile float client_x, client_y;
-    public volatile float server_rot = 0f;
-    public volatile float client_rot = 0f;
+    public volatile float server_rot, client_rot;
     public volatile bool hasUpdate = false;
 
     void Awake()
     {
-        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+        if (Instance != this && Instance != null)
+        {
+            Destroy(gameObject);
+            return;
+        }
         Instance = this;
         DontDestroyOnLoad(gameObject);
     }
@@ -42,6 +43,9 @@ public class ClientUDP : MonoBehaviour
         OnApplicationQuit();
     }
 
+    // ---------------------------------------------------------
+    // INITIALIZATION
+    // ---------------------------------------------------------
     public void StartClient()
     {
         try
@@ -54,164 +58,139 @@ public class ClientUDP : MonoBehaviour
             receiveThread.IsBackground = true;
             receiveThread.Start();
 
-            Debug.Log("[CLIENT] Cliente UDP iniciado. Server: " + serverIP + ":" + port);
+            Debug.Log("[CLIENT] UDP client started (binary mode).");
         }
         catch (Exception e)
         {
-            Debug.LogError("[CLIENT] Error al iniciar: " + e.Message);
+            Debug.LogError("[CLIENT] Init error: " + e.Message);
         }
     }
 
-    // --- Enviar input vector al servidor ---
+    // ---------------------------------------------------------
+    // SEND INPUT
+    // ---------------------------------------------------------
     public void SendInput(Vector2 input, float rotationZ)
     {
-        if (!running || clientSocket == null || serverEP == null) return;
+        if (!running) return;
 
-        try
-        {
-            string json =
-                "{ \"type\": \"input\", " +
-                "\"ix\": " + input.x.ToString(CultureInfo.InvariantCulture) + ", " +
-                "\"iy\": " + input.y.ToString(CultureInfo.InvariantCulture) + ", " +
-                "\"rot\": " + rotationZ.ToString(CultureInfo.InvariantCulture) +
-                " }";
+        byte[] data = new byte[1 + 4 * 3]; // packetType + 3 floats
+        int offset = 0;
 
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
-        }
-        catch { }
+        data[offset++] = 0; // INPUT packet
+
+        Buffer.BlockCopy(BitConverter.GetBytes(input.x), 0, data, offset, 4); offset += 4;
+        Buffer.BlockCopy(BitConverter.GetBytes(input.y), 0, data, offset, 4); offset += 4;
+        Buffer.BlockCopy(BitConverter.GetBytes(rotationZ), 0, data, offset, 4);
+
+        clientSocket.SendTo(data, serverEP);
     }
 
-    // --- Enviar petición de disparo al servidor ---
-    public void SendShootRequest(Vector2 position, float rotationZ, Vector2 direction)
+    // ---------------------------------------------------------
+    // SEND SHOOT REQUEST
+    // ---------------------------------------------------------
+    public void SendShootRequest(Vector2 pos, float rotationZ, Vector2 direction)
     {
-        if (!running || clientSocket == null || serverEP == null) return;
+        if (!running) return;
 
-        try
-        {
-            string json =
-                "{ \"type\": \"shoot\", " +
-                "\"x\": " + position.x.ToString(CultureInfo.InvariantCulture) + ", " +
-                "\"y\": " + position.y.ToString(CultureInfo.InvariantCulture) + ", " +
-                "\"rotationZ\": " + rotationZ.ToString(CultureInfo.InvariantCulture) + ", " +
-                "\"dirX\": " + direction.x.ToString(CultureInfo.InvariantCulture) + ", " +
-                "\"dirY\": " + direction.y.ToString(CultureInfo.InvariantCulture) +
-                " }";
+        byte[] data = new byte[1 + 4 * 5];
+        int o = 0;
 
-            byte[] data = Encoding.UTF8.GetBytes(json);
-            clientSocket.SendTo(data, data.Length, SocketFlags.None, serverEP);
-        }
-        catch (Exception e)
-        {
-            Debug.LogWarning("[CLIENT] SendShootRequest error: " + e.Message);
-        }
+        data[o++] = 1; // SHOOT packet
+
+        Buffer.BlockCopy(BitConverter.GetBytes(pos.x), 0, data, o, 4); o += 4;
+        Buffer.BlockCopy(BitConverter.GetBytes(pos.y), 0, data, o, 4); o += 4;
+        Buffer.BlockCopy(BitConverter.GetBytes(rotationZ), 0, data, o, 4); o += 4;
+        Buffer.BlockCopy(BitConverter.GetBytes(direction.x), 0, data, o, 4); o += 4;
+        Buffer.BlockCopy(BitConverter.GetBytes(direction.y), 0, data, o, 4);
+
+        clientSocket.SendTo(data, serverEP);
     }
 
-    // --- Recepción en hilo ---
+    // ---------------------------------------------------------
+    // RECEIVE LOOP
+    // ---------------------------------------------------------
     void ReceiveLoop()
     {
-        byte[] buffer = new byte[4096];
+        byte[] buffer = new byte[1024];
         EndPoint remote = new IPEndPoint(IPAddress.Any, 0);
 
         while (running)
         {
             try
             {
-                int received = clientSocket.ReceiveFrom(buffer, ref remote);
-                string msg = Encoding.UTF8.GetString(buffer, 0, received);
+                int length = clientSocket.ReceiveFrom(buffer, ref remote);
+                if (length == 0) continue;
 
-                if (msg.Contains("\"server_x\"") || msg.Contains("\"client_x\""))
+                byte packetType = buffer[0];
+
+                switch (packetType)
                 {
-                    ParseServerJSON(msg);
-                    hasUpdate = true;
-                }
-                else if (msg.Contains("\"type\": \"spawnProjectile\""))
-                {
-                    ParseSpawnJSON(msg);
-                }
-                else
-                {
-                    // otros tipos si los hay
+                    case 2: ParseStatePacket(buffer); break;
+                    case 3: ParseProjectilePacket(buffer); break;
                 }
             }
-            catch (Exception) { }
+            catch { }
         }
     }
 
-    void ParseServerJSON(string json)
+    // ---------------------------------------------------------
+    // PARSE SERVER STATE PACKET
+    // ---------------------------------------------------------
+    void ParseStatePacket(byte[] buf)
     {
         try
         {
-            json = json.Trim().TrimStart('{').TrimEnd('}');
-            string[] pairs = json.Split(',');
+            int o = 1; // skip packet type
 
-            foreach (string pair in pairs)
-            {
-                string[] kv = pair.Split(':');
-                if (kv.Length != 2) continue;
+            server_x   = BitConverter.ToSingle(buf, o); o += 4;
+            server_y   = BitConverter.ToSingle(buf, o); o += 4;
+            client_x   = BitConverter.ToSingle(buf, o); o += 4;
+            client_y   = BitConverter.ToSingle(buf, o); o += 4;
+            server_rot = BitConverter.ToSingle(buf, o); o += 4;
+            client_rot = BitConverter.ToSingle(buf, o); o += 4;
 
-                string key = kv[0].Trim().Replace("\"", "");
-                string value = kv[1].Trim().Replace("\"", "");
-
-                float f = float.Parse(value, CultureInfo.InvariantCulture);
-
-                switch (key)
-                {
-                    case "server_x": server_x = f; break;
-                    case "server_y": server_y = f; break;
-                    case "client_x": client_x = f; break;
-                    case "client_y": client_y = f; break;
-                    case "server_rot": server_rot = f; break;
-                    case "client_rot": client_rot = f; break;
-                }
-            }
+            hasUpdate = true;
         }
         catch (Exception e)
         {
-            Debug.LogWarning("[CLIENT] ParseServerJSON error: " + e.Message + " | raw: " + json);
+            Debug.LogWarning("[CLIENT] State packet parse error: " + e.Message);
         }
     }
 
-    void ParseSpawnJSON(string json)
+    // ---------------------------------------------------------
+    // PARSE PROJECTILE SPAWN
+    // ---------------------------------------------------------
+    void ParseProjectilePacket(byte[] buf)
     {
         try
         {
-            float x = ExtractFloat(json, "x");
-            float y = ExtractFloat(json, "y");
-            float rotationZ = ExtractFloat(json, "rotationZ");
-            float dirX = ExtractFloat(json, "dirX");
-            float dirY = ExtractFloat(json, "dirY");
-            float speed = ExtractFloat(json, "speed");
+            int o = 1;
 
-            float fromServer = ExtractFloat(json, "fromServer");
+            float x = BitConverter.ToSingle(buf, o); o += 4;
+            float y = BitConverter.ToSingle(buf, o); o += 4;
+            float rot = BitConverter.ToSingle(buf, o); o += 4;
+            float dirX = BitConverter.ToSingle(buf, o); o += 4;
+            float dirY = BitConverter.ToSingle(buf, o); o += 4;
+            float speed = BitConverter.ToSingle(buf, o); o += 4;
+            bool fromServer = BitConverter.ToSingle(buf, o) == 1f;
 
             NetworkShootingClient.SpawnInfo info = new NetworkShootingClient.SpawnInfo
             {
                 x = x,
                 y = y,
-                rotationZ = rotationZ,
+                rotationZ = rot,
                 dirX = dirX,
                 dirY = dirY,
                 speed = speed,
-                fromServer = (fromServer == 1)
+                fromServer = fromServer
             };
 
             NetworkShootingClient.Instance?.EnqueueSpawn(info);
         }
         catch (Exception e)
         {
-            Debug.LogWarning("[CLIENT] ParseSpawnJSON error: " + e.Message + " | raw: " + json);
+            Debug.LogWarning("[CLIENT] Projectile packet error: " + e.Message);
         }
-    }
-
-    float ExtractFloat(string json, string key)
-    {
-        int idx = json.IndexOf("\"" + key + "\":");
-        if (idx == -1) return 0f;
-        int start = idx + key.Length + 3;
-        int end = json.IndexOfAny(new char[] { ',', '}' }, start);
-        string value = json.Substring(start, end - start).Trim();
-        return float.Parse(value, CultureInfo.InvariantCulture);
     }
 
     public void OnApplicationQuit()

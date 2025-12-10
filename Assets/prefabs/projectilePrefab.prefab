@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 2072397923725176290}
   - component: {fileID: -4792337448409901069}
   - component: {fileID: 7425171771419940258}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: projectilePrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27,14 +27,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 356683303254194531}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: -0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1219701118534991307}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: -90}
 --- !u!114 &2072397923725176290
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -121,7 +121,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1219701118534991307}
   - component: {fileID: 8358751040796851890}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: laserRed_1
   m_TagString: Untagged
   m_Icon: {fileID: 0}

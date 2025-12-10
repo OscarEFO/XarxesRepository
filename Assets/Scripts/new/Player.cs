@@ -10,25 +10,29 @@ public class Player : MonoBehaviour
     [Header("Player Data")]
     public string userName = "User";
     public float moveSpeed = 5f;
-    public float rotationSpeed = 720f;
     public TMP_Text tmp;
 
     [Header("State")]
-    public bool isLocalPlayer = false;     // Solo true en TU propio jugador
-    public int networkId = -1;             // ID asignado por el servidor
+    public bool isLocalPlayer = false;
+    public int networkId;
+
+    [Tooltip("If your sprite faces UP (default), set 0. If it faces RIGHT, set -90.")]
+    public float rotationOffset = 0f;
 
     private Rigidbody2D rb;
-
     private Vector2 moveInput;
-    private bool shooting;
+
+    private float desiredAngle = 0f;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        tmp.SetText(this.userName);
 
-        if (isLocalPlayer && clientManager != null)
-            clientManager.SetLocalPlayer(this);
+        if (tmp != null)
+            tmp.SetText(userName);
+
+        if (clientManager == null)
+            clientManager = FindObjectOfType<ClientManagerUDP>();
     }
 
     void Update()
@@ -36,44 +40,46 @@ public class Player : MonoBehaviour
         if (!isLocalPlayer) return;
 
         HandleInput();
+        UpdateRotationFromMouse();
         SendUpdateToServer();
     }
 
     void FixedUpdate()
     {
-        if (isLocalPlayer)
-        {
-            rb.linearVelocity = moveInput * moveSpeed;
-            RotateTowardsMouse();
-        }
+        if (!isLocalPlayer) return;
+
+        rb.linearVelocity = moveInput * moveSpeed;
+
+        rb.rotation = desiredAngle;
     }
 
     private void HandleInput()
     {
-        // Movimiento con teclado
         moveInput = Vector2.zero;
-        if (Keyboard.current.wKey.isPressed) moveInput.y += 1;
-        if (Keyboard.current.sKey.isPressed) moveInput.y -= 1;
-        if (Keyboard.current.aKey.isPressed) moveInput.x -= 1;
-        if (Keyboard.current.dKey.isPressed) moveInput.x += 1;
 
-        // Normalizar diagonal
+        var kb = Keyboard.current;
+        if (kb.wKey.isPressed) moveInput.y += 1;
+        if (kb.sKey.isPressed) moveInput.y -= 1;
+        if (kb.aKey.isPressed) moveInput.x -= 1;
+        if (kb.dKey.isPressed) moveInput.x += 1;
+
         if (moveInput.magnitude > 1f)
             moveInput.Normalize();
-
-        // Disparo con bot�n izquierdo del mouse
-        shooting = Mouse.current.leftButton.wasPressedThisFrame;
-        if (shooting)
-            SendShootPacket();
     }
 
-    private void RotateTowardsMouse()
+    private void UpdateRotationFromMouse()
     {
-        Vector2 mousePosition = Mouse.current.position.ReadValue();
-        Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(mousePosition);
-        Vector2 direction = (mouseWorld - transform.position);
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        rb.rotation = angle;
+        if (Mouse.current == null) return;
+
+        Vector2 mousePos = Mouse.current.position.ReadValue();
+        Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(mousePos);
+        Vector2 dir = mouseWorld - transform.position;
+
+        if (dir.sqrMagnitude > 0.0001f)
+        {
+            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+            desiredAngle = angle + rotationOffset;
+        }
     }
 
     private void SendUpdateToServer()
@@ -84,23 +90,7 @@ public class Player : MonoBehaviour
             networkId,
             transform.position,
             rb.rotation,
-            rb.linearVelocity,
-            shooting
-        );
-    }
-
-    private void SendShootPacket()
-    {
-        if (clientManager == null) return;
-
-        Vector2 mousePosition = Mouse.current.position.ReadValue();
-        Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(mousePosition);
-        Vector2 shootDir = (mouseWorld - transform.position).normalized;
-
-        clientManager.SendShoot(
-            networkId,
-            transform.position,
-            shootDir
+            rb.linearVelocity
         );
     }
 
