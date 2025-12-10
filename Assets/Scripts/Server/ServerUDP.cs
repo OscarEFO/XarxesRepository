@@ -39,6 +39,9 @@ public class ServerUDP : MonoBehaviour
 
         InvokeRepeating(nameof(BroadcastSnapshot), snapshotRate, snapshotRate);
 
+        // ASTEROID SPAWNING
+        InvokeRepeating(nameof(ServerSpawnAsteroid), 2f, 3f);
+
         Debug.Log($"[SERVER] Running on UDP:{port}");
     }
 
@@ -47,7 +50,6 @@ public class ServerUDP : MonoBehaviour
         running = false;
         socket?.Close();
     }
-
 
     private void ReceiveLoop()
     {
@@ -141,21 +143,13 @@ public class ServerUDP : MonoBehaviour
     private void BroadcastSnapshot()
     {
         foreach (var kv in players)
-            BroadcastCreate(kv.Value); 
+            BroadcastCreate(kv.Value);
     }
 
     private void BroadcastCreate(PlayerState p)
     {
         foreach (var ep in endpoints.Values)
-        {
             socket.SendTo(BuildCreatePacket(p), ep);
-        }
-    }
-
-    private void BroadcastShoot(int id, float ox, float oy, float dx, float dy)
-    {
-        foreach (var ep in endpoints.Values)
-            socket.SendTo(BuildShootPacket(id, ox, oy, dx, dy), ep);
     }
 
     private byte[] BuildCreatePacket(PlayerState p)
@@ -175,6 +169,12 @@ public class ServerUDP : MonoBehaviour
         return ms.ToArray();
     }
 
+    private void BroadcastShoot(int id, float ox, float oy, float dx, float dy)
+    {
+        foreach (var ep in endpoints.Values)
+            socket.SendTo(BuildShootPacket(id, ox, oy, dx, dy), ep);
+    }
+
     private byte[] BuildShootPacket(int id, float ox, float oy, float dx, float dy)
     {
         var ms = new System.IO.MemoryStream();
@@ -186,6 +186,39 @@ public class ServerUDP : MonoBehaviour
         w.Write(oy);
         w.Write(dx);
         w.Write(dy);
+
+        return ms.ToArray();
+    }
+
+
+    private void ServerSpawnAsteroid()
+    {
+        float x = UnityEngine.Random.Range(-10f, 10f);
+        float y = 6f;
+        float dirX = UnityEngine.Random.Range(-0.5f, 0.5f);
+        float dirY = -1f;
+        float speed = UnityEngine.Random.Range(2f, 5f);
+
+        BroadcastAsteroid(x, y, dirX, dirY, speed);
+    }
+
+    private void BroadcastAsteroid(float x, float y, float dirX, float dirY, float speed)
+    {
+        foreach (var ep in endpoints.Values)
+            socket.SendTo(BuildAsteroidPacket(x, y, dirX, dirY, speed), ep);
+    }
+
+    private byte[] BuildAsteroidPacket(float x, float y, float dirX, float dirY, float speed)
+    {
+        var ms = new System.IO.MemoryStream();
+        var w = new System.IO.BinaryWriter(ms);
+
+        w.Write((byte)3);
+        w.Write(x);
+        w.Write(y);
+        w.Write(dirX);
+        w.Write(dirY);
+        w.Write(speed);
 
         return ms.ToArray();
     }
