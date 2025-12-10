@@ -152,7 +152,10 @@ MonoBehaviour:
   serverIP: 127.0.0.1
   serverPort: 9050
   playerPrefab: {fileID: 5810399723640441037, guid: 5be71d5d2130e614aa3b3fc4ae48d40b, type: 3}
+  player2Prefab: {fileID: 5508334249797414475, guid: d927e5414cdf49a4bae1be8cd1da7e4e, type: 3}
   bulletPrefab: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
+  bulletPrefabGreen: {fileID: 356683303254194531, guid: 2dcebfcf9c009ee4ba22641e4866f5da, type: 3}
+  bulletSpeed: 15
   localPlayer: {fileID: 0}
 --- !u!4 &84535884
 Transform:

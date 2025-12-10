@@ -5,39 +5,37 @@ using System.Net.Sockets;
 using System.Threading;
 using UnityEngine;
 
-/// <summary>
-/// ClientManagerUDP - lightweight client networking compatible with the simple ServerUDP protocol:
-/// Packet layout:
-/// [byte] PacketType
-/// Create(0): [int id][short nameLen][name bytes][float x][float y][float velX][float velY][float rot]
-/// Update(1): [int id][float x][float y][float velX][float velY][float rot]
-/// Shoot (2): [int id][float originX][float originY][float dirX][float dirY]
-/// </summary>
 public class ClientManagerUDP : MonoBehaviour
 {
     [Header("Connection")]
-    public string userName = "Player";
+    public string userName = "";
     public string serverIP = "127.0.0.1";
     public int serverPort = 9050;
 
     [Header("Prefabs")]
     public GameObject playerPrefab;
+    public GameObject player2Prefab;
     public GameObject bulletPrefab;
+    public GameObject bulletPrefabGreen;
     public float bulletSpeed = 15f;
 
-    // Networking
     private Socket socket;
     private IPEndPoint serverEndPoint;
     private Thread receiveThread;
     private volatile bool running = false;
 
-    // Local player
     public Player localPlayer;
     private int localId;
 
-    // Remote players
     private readonly Dictionary<int, Player> players = new Dictionary<int, Player>();
     private readonly object playersLock = new object();
+
+    // FIX --------------------------
+    // Instead of blindly incrementing connectedPlayerCount incorrectly,
+    // we track join order PER PLAYER ID.
+    private readonly Dictionary<int, int> joinOrder = new Dictionary<int, int>();
+    private int nextJoinOrder = 1;
+    // ----------------------------------
 
     void Start()
     {
@@ -55,7 +53,6 @@ public class ClientManagerUDP : MonoBehaviour
 
         SetupSocket();
         StartReceiveThread();
-
         SendCreate();
 
         Debug.Log($"[CLIENT] Started localId={localId} userName='{userName}' server={serverIP}:{serverPort}");
@@ -99,7 +96,6 @@ public class ClientManagerUDP : MonoBehaviour
         localPlayer = p;
     }
 
-
     public void SendCreate()
     {
         try
@@ -110,21 +106,16 @@ public class ClientManagerUDP : MonoBehaviour
                 w.Write((byte)0);
                 w.Write(localId);
                 WriteString(w, userName);
-                w.Write(0f); // pos.x (inicial)
-                w.Write(0f); // pos.y
-                w.Write(0f); // vel.x
-                w.Write(0f); // vel.y
-                w.Write(0f); // rot
+                w.Write(0f);
+                w.Write(0f);
+                w.Write(0f);
+                w.Write(0f);
+                w.Write(0f);
 
-                var data = ms.ToArray();
-                socket.SendTo(data, serverEndPoint);
+                socket.SendTo(ms.ToArray(), serverEndPoint);
             }
-            Debug.Log($"[CLIENT] Sent CREATE id={localId} name='{userName}'");
         }
-        catch (Exception e)
-        {
-            Debug.LogWarning("[CLIENT] SendCreate failed: " + e.Message);
-        }
+        catch { }
     }
 
     public void SendUpdate(int id, Vector2 pos, float rot, Vector2 vel)
@@ -134,7 +125,7 @@ public class ClientManagerUDP : MonoBehaviour
             using (var ms = new System.IO.MemoryStream())
             using (var w = new System.IO.BinaryWriter(ms))
             {
-                w.Write((byte)1); 
+                w.Write((byte)1);
                 w.Write(id);
                 w.Write(pos.x);
                 w.Write(pos.y);
@@ -142,14 +133,10 @@ public class ClientManagerUDP : MonoBehaviour
                 w.Write(vel.y);
                 w.Write(rot);
 
-                var data = ms.ToArray();
-                socket.SendTo(data, serverEndPoint);
+                socket.SendTo(ms.ToArray(), serverEndPoint);
             }
         }
-        catch (Exception e)
-        {
-            Debug.LogWarning("[CLIENT] SendUpdate failed: " + e.Message);
-        }
+        catch { }
     }
 
     public void SendShoot(int id, Vector2 origin, Vector2 direction)
@@ -159,22 +146,17 @@ public class ClientManagerUDP : MonoBehaviour
             using (var ms = new System.IO.MemoryStream())
             using (var w = new System.IO.BinaryWriter(ms))
             {
-                w.Write((byte)2); 
+                w.Write((byte)2);
                 w.Write(id);
                 w.Write(origin.x);
                 w.Write(origin.y);
                 w.Write(direction.x);
                 w.Write(direction.y);
 
-                var data = ms.ToArray();
-                socket.SendTo(data, serverEndPoint);
+                socket.SendTo(ms.ToArray(), serverEndPoint);
             }
-            Debug.Log($"[CLIENT] Sent SHOOT id={id} dir={direction} origin={origin}");
         }
-        catch (Exception e)
-        {
-            Debug.LogWarning("[CLIENT] SendShoot failed: " + e.Message);
-        }
+        catch { }
     }
 
     private void ReceiveLoop()
@@ -190,90 +172,70 @@ public class ClientManagerUDP : MonoBehaviour
                 if (recv <= 0) { Thread.Sleep(1); continue; }
 
                 byte[] data = new byte[recv];
-                Array.Copy(buffer, 0, data, 0, recv);
+                Array.Copy(buffer, data, recv);
 
-                ParseIncomingPacket(data, (IPEndPoint)remote);
+                ParseIncomingPacket(data);
             }
-            catch (SocketException)
-            {
-                Thread.Sleep(1);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning("[CLIENT] ReceiveLoop error: " + ex.Message);
-                Thread.Sleep(1);
-            }
+            catch { Thread.Sleep(1); }
         }
     }
 
-    private void ParseIncomingPacket(byte[] buf, IPEndPoint sender)
+    private void ParseIncomingPacket(byte[] buf)
     {
         try
         {
             int o = 0;
-            if (buf.Length < 1) return;
             byte type = buf[o++];
 
             switch (type)
             {
                 case 0: 
+                {
+                    int id = BitConverter.ToInt32(buf, o); o += 4;
+                    string name = ReadString(buf, ref o);
+                    float x = BitConverter.ToSingle(buf, o); o += 4;
+                    float y = BitConverter.ToSingle(buf, o); o += 4;
+                    float velx = BitConverter.ToSingle(buf, o); o += 4;
+                    float vely = BitConverter.ToSingle(buf, o); o += 4;
+                    float rot = BitConverter.ToSingle(buf, o); o += 4;
+
+                    MainThreadDispatcher.Enqueue(() =>
+                        SpawnOrUpdatePlayer(id, name, new Vector2(x,y), rot, new Vector2(velx,vely)));
+                }
+                break;
+
+                case 1:
+                {
+                    int id = BitConverter.ToInt32(buf, o); o += 4;
+                    float x = BitConverter.ToSingle(buf, o); o += 4;
+                    float y = BitConverter.ToSingle(buf, o); o += 4;
+                    float velx = BitConverter.ToSingle(buf, o); o += 4;
+                    float vely = BitConverter.ToSingle(buf, o); o += 4;
+                    float rot = BitConverter.ToSingle(buf, o); o += 4;
+
+                    MainThreadDispatcher.Enqueue(() =>
                     {
-                        int id = BitConverter.ToInt32(buf, o); o += 4;
-                        string name = ReadString(buf, ref o);
-                        float x = BitConverter.ToSingle(buf, o); o += 4;
-                        float y = BitConverter.ToSingle(buf, o); o += 4;
-                        float velx = BitConverter.ToSingle(buf, o); o += 4;
-                        float vely = BitConverter.ToSingle(buf, o); o += 4;
-                        float rot = BitConverter.ToSingle(buf, o); o += 4;
+                        if (players.ContainsKey(id) && !players[id].isLocalPlayer)
+                            players[id].ApplyNetworkState(new Vector2(x,y), rot, new Vector2(velx,vely));
+                    });
+                }
+                break;
 
-                        MainThreadDispatcher.Enqueue(() =>
-                        {
-                            SpawnOrUpdatePlayer(id, name, new Vector2(x, y), rot, new Vector2(velx, vely));
-                        });
-                    }
-                    break;
+                case 2:
+                {
+                    int id = BitConverter.ToInt32(buf, o); o += 4;
+                    float ox = BitConverter.ToSingle(buf, o); o += 4;
+                    float oy = BitConverter.ToSingle(buf, o); o += 4;
+                    float dx = BitConverter.ToSingle(buf, o); o += 4;
+                    float dy = BitConverter.ToSingle(buf, o); o += 4;
 
-                case 1: 
-                    {
-                        int id = BitConverter.ToInt32(buf, o); o += 4;
-                        float x = BitConverter.ToSingle(buf, o); o += 4;
-                        float y = BitConverter.ToSingle(buf, o); o += 4;
-                        float velx = BitConverter.ToSingle(buf, o); o += 4;
-                        float vely = BitConverter.ToSingle(buf, o); o += 4;
-                        float rot = BitConverter.ToSingle(buf, o); o += 4;
-
-                        MainThreadDispatcher.Enqueue(() =>
-                        {
-                            if (players.ContainsKey(id) && !players[id].isLocalPlayer)
-                                players[id].ApplyNetworkState(new Vector2(x, y), rot, new Vector2(velx, vely));
-                        });
-                    }
-                    break;
-
-                case 2: 
-                    {
-                        int id = BitConverter.ToInt32(buf, o); o += 4;
-                        float ox = BitConverter.ToSingle(buf, o); o += 4;
-                        float oy = BitConverter.ToSingle(buf, o); o += 4;
-                        float dx = BitConverter.ToSingle(buf, o); o += 4;
-                        float dy = BitConverter.ToSingle(buf, o); o += 4;
-
-                        MainThreadDispatcher.Enqueue(() =>
-                        {
-                            HandleIncomingShoot(id, new Vector2(ox, oy), new Vector2(dx, dy));
-                        });
-                    }
-                    break;
-
-                default:
-                    Debug.LogWarning("[CLIENT] Unknown packet type: " + type);
-                    break;
+                    MainThreadDispatcher.Enqueue(() =>
+                        HandleIncomingShoot(id, new Vector2(ox,oy), new Vector2(dx,dy)));
+                }
+                break;
             }
         }
-        catch (Exception e)
-        {
-            Debug.LogWarning("[CLIENT] ParseIncomingPacket error: " + e.Message);
-        }
+        catch { }
     }
 
     private void SpawnOrUpdatePlayer(int id, string name, Vector2 pos, float rot, Vector2 vel)
@@ -282,85 +244,80 @@ public class ClientManagerUDP : MonoBehaviour
 
         lock (playersLock)
         {
+            // NEW PLAYER
             if (!players.ContainsKey(id))
             {
-                if (playerPrefab == null)
+                // FIX: Assign join order **once**, per unique player ID
+                if (!joinOrder.ContainsKey(id))
                 {
-                    Debug.LogError("[CLIENT] playerPrefab missing");
-                    return;
+                    joinOrder[id] = nextJoinOrder;
+                    nextJoinOrder++;
                 }
 
-                GameObject go = Instantiate(playerPrefab, new Vector3(pos.x, pos.y, 0f), Quaternion.Euler(0, 0, rot));
+                int order = joinOrder[id];
+
+                GameObject prefabToUse = (order == 1) ? playerPrefab : player2Prefab;
+
+                GameObject go = Instantiate(prefabToUse, pos, Quaternion.Euler(0, 0, rot));
                 go.name = $"Player_{id}";
+
                 Player p = go.GetComponent<Player>();
-                if (p == null)
-                {
-                    Debug.LogError("[CLIENT] playerPrefab has no Player script");
-                    Destroy(go);
-                    return;
-                }
 
                 p.networkId = id;
-                p.userName = name;
                 p.clientManager = this;
                 p.isLocalPlayer = isLocal;
 
-                if (p.tmp != null) p.tmp.SetText(name);
+                // FIX: Assign Player1 / Player2 names PROPERLY
+                string finalName = (order == 1) ? "Player1" : "Player2";
+                p.userName = finalName;
+                if (p.tmp != null)
+                    p.tmp.SetText(finalName);
+
+                // FIX: Assign correct bullet prefab
+                p.bulletPrefab = (order == 1) ?
+                    bulletPrefab :
+                    bulletPrefabGreen;
 
                 players[id] = p;
 
                 if (isLocal)
-                {
                     localPlayer = p;
-                    Debug.Log($"[CLIENT] Local player spawned id={id} name='{name}'");
-                }
-                else
-                {
-                    Debug.Log($"[CLIENT] Remote player spawned id={id} name='{name}'");
-                }
 
+                Debug.Log($"[CLIENT] Spawned {finalName} (id={id}) order={order}");
                 return;
             }
         }
 
-        // update existing (skip local)
+        // UPDATE REMOTE PLAYER
         if (!isLocal)
-        {
             players[id].ApplyNetworkState(pos, rot, vel);
-        }
     }
 
     private void HandleIncomingShoot(int shooterId, Vector2 origin, Vector2 direction)
     {
-        if (bulletPrefab == null) return;
+        if (!players.TryGetValue(shooterId, out var shooter))
+            return;
+
+        GameObject prefab = shooter.bulletPrefab;
+        if (prefab == null) return;
 
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
-        Quaternion rot = Quaternion.Euler(0, 0, angle);
 
-        GameObject b = Instantiate(
-            bulletPrefab,
-            new Vector3(origin.x, origin.y, 0f),
-            rot
-        );
+        GameObject b = Instantiate(prefab, origin, Quaternion.Euler(0,0,angle));
 
         if (b.TryGetComponent<Rigidbody2D>(out var rb))
             rb.linearVelocity = direction.normalized * bulletSpeed;
 
-        if (players.TryGetValue(shooterId, out var shooterPlayer))
-        {
-            var bulletCol = b.GetComponent<Collider2D>();
-            var shooterCol = shooterPlayer.GetComponent<Collider2D>();
-            if (bulletCol != null && shooterCol != null)
-                Physics2D.IgnoreCollision(bulletCol, shooterCol);
-        }
+        var bulletCol = b.GetComponent<Collider2D>();
+        var shooterCol = shooter.GetComponent<Collider2D>();
+        if (bulletCol && shooterCol)
+            Physics2D.IgnoreCollision(bulletCol, shooterCol);
     }
-
 
     private static void WriteString(System.IO.BinaryWriter w, string s)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(s);
-        short len = (short)bytes.Length;
-        w.Write(len);
+        w.Write((short)bytes.Length);
         w.Write(bytes);
     }
 

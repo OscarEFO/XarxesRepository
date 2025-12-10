@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 2072397923725176290}
   - component: {fileID: -4792337448409901069}
   - component: {fileID: 7425171771419940258}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: projectilePrefabGreen
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -121,7 +121,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1219701118534991307}
   - component: {fileID: 8358751040796851890}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: laserRed_1
   m_TagString: Untagged
   m_Icon: {fileID: 0}

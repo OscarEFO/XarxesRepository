@@ -19,10 +19,17 @@ public class Player : MonoBehaviour
     [Tooltip("If your sprite faces UP (default), set 0. If it faces RIGHT, set -90.")]
     public float rotationOffset = 0f;
 
+    [Header("Shooting")]
+    public GameObject bulletPrefab;  
+
     private Rigidbody2D rb;
     private Vector2 moveInput;
 
     private float desiredAngle = 0f;
+    private Vector2 targetPosition;
+    private float targetRotation;
+    private Vector2 targetVelocity;
+    private bool hasIncomingNetworkUpdate = false;
 
     void Start()
     {
@@ -46,11 +53,30 @@ public class Player : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (!isLocalPlayer) return;
+        if (isLocalPlayer)
+        {
+            rb.linearVelocity = moveInput * moveSpeed;
+            rb.rotation = desiredAngle;
+            return;
+        }
 
-        rb.linearVelocity = moveInput * moveSpeed;
+        if (hasIncomingNetworkUpdate)
+        {
+            transform.position = Vector2.Lerp(
+                transform.position,
+                targetPosition,
+                0.25f
+            );
 
-        rb.rotation = desiredAngle;
+            float smoothedRot = Mathf.LerpAngle(
+                transform.rotation.eulerAngles.z,
+                targetRotation,
+                0.25f
+            );
+            transform.rotation = Quaternion.Euler(0, 0, smoothedRot);
+
+            rb.linearVelocity = targetVelocity;
+        }
     }
 
     private void HandleInput()
@@ -98,8 +124,9 @@ public class Player : MonoBehaviour
     {
         if (isLocalPlayer) return;
 
-        transform.position = pos;
-        transform.rotation = Quaternion.Euler(0, 0, rot);
-        rb.linearVelocity = vel;
+        targetPosition = pos;
+        targetRotation = rot;
+        targetVelocity = vel;
+        hasIncomingNetworkUpdate = true;
     }
 }

@@ -48,9 +48,7 @@ public class ServerUDP : MonoBehaviour
         socket?.Close();
     }
 
-    // --------------------------
-    // RECEIVE LOOP
-    // --------------------------
+
     private void ReceiveLoop()
     {
         byte[] buffer = new byte[1024];
@@ -80,9 +78,6 @@ public class ServerUDP : MonoBehaviour
         }
     }
 
-    // --------------------------
-    // PACKET PARSER
-    // --------------------------
     private void ParsePacket(byte[] buf, int len, IPEndPoint ep)
     {
         int o = 0;
@@ -142,13 +137,11 @@ public class ServerUDP : MonoBehaviour
         BroadcastShoot(id, ox, oy, dx, dy);
     }
 
-    // --------------------------
-    // BROADCAST FUNCTIONS
-    // --------------------------
+
     private void BroadcastSnapshot()
     {
         foreach (var kv in players)
-            BroadcastCreate(kv.Value); // using create/update for simplicity
+            BroadcastCreate(kv.Value); 
     }
 
     private void BroadcastCreate(PlayerState p)
@@ -165,15 +158,12 @@ public class ServerUDP : MonoBehaviour
             socket.SendTo(BuildShootPacket(id, ox, oy, dx, dy), ep);
     }
 
-    // --------------------------
-    // PACKET BUILDERS
-    // --------------------------
     private byte[] BuildCreatePacket(PlayerState p)
     {
         var ms = new System.IO.MemoryStream();
         var w = new System.IO.BinaryWriter(ms);
 
-        w.Write((byte)0);      // CREATE
+        w.Write((byte)0);
         w.Write(p.id);
         WriteString(w, p.name);
         w.Write(p.pos.x);
@@ -190,7 +180,7 @@ public class ServerUDP : MonoBehaviour
         var ms = new System.IO.MemoryStream();
         var w = new System.IO.BinaryWriter(ms);
 
-        w.Write((byte)2); // SHOOT
+        w.Write((byte)2);
         w.Write(id);
         w.Write(ox);
         w.Write(oy);
@@ -200,9 +190,7 @@ public class ServerUDP : MonoBehaviour
         return ms.ToArray();
     }
 
-    // --------------------------
-    // STRING HELPERS
-    // --------------------------
+
     private void WriteString(System.IO.BinaryWriter w, string s)
     {
         w.Write((short)s.Length);

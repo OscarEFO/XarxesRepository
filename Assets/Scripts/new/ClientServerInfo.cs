@@ -32,7 +32,6 @@ public class ClientServerInfo : MonoBehaviour
         serverIP = ip;
     }
 
-    // -------------------- NUEVO --------------------
     // Llamado por SceneManag para actualizar ClientManager al cambiar de escena
     public void ChangeUserAndIP()
     {
