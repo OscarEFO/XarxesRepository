@@ -90,6 +90,8 @@ public class ServerUDP : MonoBehaviour
             case 0: HandleCreate(buf, ref o, ep); break;
             case 1: HandleUpdate(buf, ref o, ep); break;
             case 2: HandleShoot(buf, ref o, ep); break;
+            case 4: HandleDelete(buf, ref o, ep); break;
+                    
         }
     }
 
@@ -114,6 +116,37 @@ public class ServerUDP : MonoBehaviour
 
         BroadcastCreate(players[id]);
     }
+    private void HandleDelete(byte[] buf, ref int o, IPEndPoint ep)
+    {
+        int id = BitConverter.ToInt32(buf, o); o += 4;
+
+        if (players.ContainsKey(id))
+        {
+            players.Remove(id);
+            Debug.Log($"[SERVER] DELETE {id}");
+        }
+
+        BroadcastDelete(id);
+    }
+    private void BroadcastDelete(int id)
+    {
+        byte[] data = BuildDeletePacket(id);
+
+        foreach (var ep in endpoints.Values)
+            socket.SendTo(data, ep);
+    }
+    private byte[] BuildDeletePacket(int id)
+    {
+        var ms = new System.IO.MemoryStream();
+        var w = new System.IO.BinaryWriter(ms);
+
+        w.Write((byte)3); // DELETE
+        w.Write(id);
+
+        return ms.ToArray();
+    }
+    
+
 
     private void HandleUpdate(byte[] buf, ref int o, IPEndPoint ep)
     {

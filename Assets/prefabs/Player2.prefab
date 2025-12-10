@@ -177,6 +177,8 @@ MonoBehaviour:
   userName: User
   moveSpeed: 5
   tmp: {fileID: 4940646813398396130}
+  maxHealth: 3
+  currentHealth: 3
   isLocalPlayer: 0
   networkId: 0
   rotationOffset: 0
@@ -223,6 +225,8 @@ MonoBehaviour:
   userName: User
   moveSpeed: 5
   tmp: {fileID: 4940646813398396130}
+  maxHealth: 3
+  currentHealth: 3
   isLocalPlayer: 0
   networkId: -1
   rotationOffset: 90

@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 7425171771419940258}
   m_Layer: 7
   m_Name: projectilePrefab
-  m_TagString: Untagged
+  m_TagString: Bullet
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -47,6 +47,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 363610e4b354ff84c973a6ca98034c66, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Projectile
+  ownerId: 0
+  damage: 1
   lifetime: 3
 --- !u!50 &-4792337448409901069
 Rigidbody2D:
@@ -105,7 +107,7 @@ CircleCollider2D:
   m_CallbackLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0

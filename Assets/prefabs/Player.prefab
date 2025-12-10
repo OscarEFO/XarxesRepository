@@ -446,6 +446,8 @@ MonoBehaviour:
   userName: User
   moveSpeed: 5
   tmp: {fileID: 6594328982591012632}
+  maxHealth: 3
+  currentHealth: 3
   isLocalPlayer: 0
   networkId: -1
   rotationOffset: -90
