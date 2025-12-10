@@ -288,21 +288,7 @@ public class ClientManagerUDP : MonoBehaviour
                         });
                     }
                     break;
-
-                case 3: // DELETE
-                    {
-                        int id = BitConverter.ToInt32(buf, o); o += 4;
-                        MainThreadDispatcher.Enqueue(() =>
-                        {
-                            if (players.ContainsKey(id))
-                            {
-                                Destroy(players[id].gameObject);
-                                players.Remove(id);
-                            }
-                        });
-                    }
-                    break;
-                case 4: // ASTEROID
+                case 3: // ASTEROID
                 {
                     float x  = BitConverter.ToSingle(buf, o); o += 4;
                     float y  = BitConverter.ToSingle(buf, o); o += 4;
@@ -324,6 +310,20 @@ public class ClientManagerUDP : MonoBehaviour
                 }
                 break;
 
+                case 4: // DELETE
+                    {
+                        int id = BitConverter.ToInt32(buf, o); o += 4;
+                        MainThreadDispatcher.Enqueue(() =>
+                        {
+                            if (players.ContainsKey(id))
+                            {
+                                Destroy(players[id].gameObject);
+                                players.Remove(id);
+                            }
+                        });
+                    }
+                    break;
+              
                 default:
                     Debug.LogWarning("[CLIENT] Unknown packet type: " + type);
                     break;

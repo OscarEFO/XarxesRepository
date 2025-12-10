@@ -140,7 +140,7 @@ public class ServerUDP : MonoBehaviour
         var ms = new System.IO.MemoryStream();
         var w = new System.IO.BinaryWriter(ms);
 
-        w.Write((byte)3); // DELETE
+        w.Write((byte)4); // DELETE
         w.Write(id);
 
         return ms.ToArray();
