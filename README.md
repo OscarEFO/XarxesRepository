@@ -9,6 +9,14 @@ Repository for Network subject by:
 - Oscar Escofet
 
 This is our 1 vs 1 multiplayer spaceship game where a red and a green spaceship face off in a shooting game where they have to take out three lives from each other, while avoiding the falling asteroids. 
+
+How does it work: 
+Open three instances of the .exe and start with clicking the "start as" at the bottom right of the menu to open the server, then click play on the two other instances to test the game.
+
+Controls: 
+    - w,a,s,d to move 
+    - left click to shoot at the mouse position
+
 For this second delivery we reestructured the code to no longer use json packages and instead use a binary package system as instructed and we implemented the requirements of the world state replication. 
 The clients passively replicate state from the server, and the packets send more than 3 types of data with player id, position, rotation, name, health... And data from the projectiles and asteroids, with also the option of those and the player being destroyed.
 Replication manager is included in the server in the ServerUDP and ClientManagerUDP scripts.
