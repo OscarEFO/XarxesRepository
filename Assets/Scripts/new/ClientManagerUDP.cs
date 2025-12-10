@@ -30,12 +30,9 @@ public class ClientManagerUDP : MonoBehaviour
     private readonly Dictionary<int, Player> players = new Dictionary<int, Player>();
     private readonly object playersLock = new object();
 
-    // FIX --------------------------
-    // Instead of blindly incrementing connectedPlayerCount incorrectly,
-    // we track join order PER PLAYER ID.
+
     private readonly Dictionary<int, int> joinOrder = new Dictionary<int, int>();
     private int nextJoinOrder = 1;
-    // ----------------------------------
 
     void Start()
     {
@@ -244,10 +241,8 @@ public class ClientManagerUDP : MonoBehaviour
 
         lock (playersLock)
         {
-            // NEW PLAYER
             if (!players.ContainsKey(id))
             {
-                // FIX: Assign join order **once**, per unique player ID
                 if (!joinOrder.ContainsKey(id))
                 {
                     joinOrder[id] = nextJoinOrder;
@@ -267,13 +262,11 @@ public class ClientManagerUDP : MonoBehaviour
                 p.clientManager = this;
                 p.isLocalPlayer = isLocal;
 
-                // FIX: Assign Player1 / Player2 names PROPERLY
                 string finalName = (order == 1) ? "Player1" : "Player2";
                 p.userName = finalName;
                 if (p.tmp != null)
                     p.tmp.SetText(finalName);
 
-                // FIX: Assign correct bullet prefab
                 p.bulletPrefab = (order == 1) ?
                     bulletPrefab :
                     bulletPrefabGreen;
@@ -288,7 +281,6 @@ public class ClientManagerUDP : MonoBehaviour
             }
         }
 
-        // UPDATE REMOTE PLAYER
         if (!isLocal)
             players[id].ApplyNetworkState(pos, rot, vel);
     }
