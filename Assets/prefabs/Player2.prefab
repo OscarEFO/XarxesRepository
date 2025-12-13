@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 2540772451182955659}
   - component: {fileID: 29328700365421344}
   - component: {fileID: 1743392707758922880}
+  - component: {fileID: 9022710160190367966}
   m_Layer: 8
   m_Name: Player2
   m_TagString: Untagged
@@ -231,6 +232,28 @@ MonoBehaviour:
   networkId: -1
   rotationOffset: 90
   bulletPrefab: {fileID: 0}
+--- !u!95 &9022710160190367966
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5508334249797414475}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 1eff539cacec91d4cb7bc2e5d4d0f055, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!1 &5942386575645215315
 GameObject:
   m_ObjectHideFlags: 0
