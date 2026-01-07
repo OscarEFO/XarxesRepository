@@ -107,7 +107,9 @@ public class Player : MonoBehaviour
 
         // Inform server (server should broadcast delete)
         if (clientManager != null)
+        {
             clientManager.SendDelete(networkId);
+        }
 
         // Destroy locally
         Destroy(gameObject);
