@@ -133,7 +133,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: RedHealthBarSpriteSheet_0
+      name: Red_HP_3
       rect:
         serializedVersion: 2
         x: 0
@@ -155,7 +155,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: RedHealthBarSpriteSheet_1
+      name: Red_HP_2
       rect:
         serializedVersion: 2
         x: 512
@@ -177,7 +177,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: RedHealthBarSpriteSheet_2
+      name: Red_HP_1
       rect:
         serializedVersion: 2
         x: 0
@@ -199,7 +199,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: RedHealthBarSpriteSheet_3
+      name: Red_HP_0
       rect:
         serializedVersion: 2
         x: 512
@@ -236,10 +236,10 @@ TextureImporter:
       - key: SpriteEditor.SliceSettings
         value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":512.0,"y":512.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
-      RedHealthBarSpriteSheet_0: 1110816098768540722
-      RedHealthBarSpriteSheet_1: 6578329308977441443
-      RedHealthBarSpriteSheet_2: -8225098544829184333
-      RedHealthBarSpriteSheet_3: 413912480874796779
+      Red_HP_0: 413912480874796779
+      Red_HP_1: -8225098544829184333
+      Red_HP_2: 6578329308977441443
+      Red_HP_3: 1110816098768540722
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

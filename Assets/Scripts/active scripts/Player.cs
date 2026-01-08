@@ -14,7 +14,7 @@ public class Player : MonoBehaviour
     public TMP_Text tmp;
 
     [Header("Health System")]
-    public int maxHealth = 3;
+    public int maxHealth = 4;
     public int currentHealth;
 
     [Header("State")]
@@ -96,22 +96,66 @@ public class Player : MonoBehaviour
     // -------------------------------
     public void TakeDamage(int amount)
     {
-        // Decrement locally and notify server
         currentHealth -= amount;
         Debug.Log($"{userName} took {amount} dmg → {currentHealth} HP");
 
-        // Send an update so other clients learn this health (we reuse vel.y slot)
-        if (clientManager != null)
-        {
-            // pack current health into vel.y (this keeps server protocol unchanged)
-            clientManager.SendUpdate(networkId, transform.position, rb.rotation, new Vector2(rb.linearVelocity.x, currentHealth));
-        }
-
+        // Clamp
         if (currentHealth <= 0)
         {
+            currentHealth = 0;
             Die();
+            return;
+        }
+
+        // Actualizar UI (solo si sigue vivo)
+        HealthUIController ui = FindObjectOfType<HealthUIController>();
+        if (ui != null)
+            ui.UpdateHealth(isLocalPlayer, currentHealth);
+
+        // Enviar update al servidor
+        if (clientManager != null)
+        {
+            clientManager.SendUpdate(
+                networkId,
+                transform.position,
+                rb.rotation,
+                new Vector2(rb.linearVelocity.x, currentHealth)
+            );
         }
     }
+
+    public void AddHealth(int amount)
+    {
+        // No revivir jugadores muertos
+        if (currentHealth <= 0)
+            return;
+
+        int oldHealth = currentHealth;
+        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+
+        // Si no ha cambiado la vida, no hacemos nada
+        if (currentHealth == oldHealth)
+            return;
+
+        Debug.Log($"{userName} healed +{amount} → {currentHealth} HP");
+
+        // Actualizar UI
+        HealthUIController ui = FindObjectOfType<HealthUIController>();
+        if (ui != null)
+            ui.UpdateHealth(isLocalPlayer, currentHealth);
+
+        // Enviar update al servidor
+        if (clientManager != null)
+        {
+            clientManager.SendUpdate(
+                networkId,
+                transform.position,
+                rb.rotation,
+                new Vector2(rb.linearVelocity.x, currentHealth)
+            );
+        }
+    }
+
 
     private void Die()
     {
@@ -205,6 +249,10 @@ public class Player : MonoBehaviour
         if (kb.sKey.isPressed) moveInput.y -= 1;
         if (kb.aKey.isPressed) moveInput.x -= 1;
         if (kb.dKey.isPressed) moveInput.x += 1;
+        if (Keyboard.current.qKey.wasPressedThisFrame)
+        {
+            AddHealth(1);
+        }
 
         if (moveInput.magnitude > 1f)
             moveInput.Normalize();

@@ -26,7 +26,7 @@ public class ClientManagerUDP : MonoBehaviour
     [Header("Prefabs")]
     public GameObject playerPrefab;
     public GameObject player2Prefab;
-    public GameObject bulletPrefab;
+    public GameObject bulletPrefabRed;
     public GameObject bulletPrefabGreen;
     public float bulletSpeed = 15f;
 
@@ -509,9 +509,9 @@ public class ClientManagerUDP : MonoBehaviour
                     p.tmp.SetText(finalName);
 
                 if (connectedPlayerCount == 1)
-                    p.bulletPrefab = bulletPrefab;
-                else if (connectedPlayerCount == 2)
                     p.bulletPrefab = bulletPrefabGreen;
+                else if (connectedPlayerCount == 2)
+                    p.bulletPrefab = bulletPrefabRed;
 
                 p.currentHealth = Mathf.Max(0, Mathf.RoundToInt(vel.y));
 
@@ -535,7 +535,7 @@ public class ClientManagerUDP : MonoBehaviour
     {
         players.TryGetValue(shooterId, out var shooter);
 
-        GameObject prefab = shooter != null ? shooter.bulletPrefab : bulletPrefab;
+        GameObject prefab = shooter != null ? shooter.bulletPrefab : bulletPrefabGreen;
         if (prefab == null) return;
 
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;

@@ -133,7 +133,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: GreenHealthBarSpriteSheet_0
+      name: Green_HP_3
       rect:
         serializedVersion: 2
         x: 0
@@ -155,7 +155,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: GreenHealthBarSpriteSheet_1
+      name: Green_HP_2
       rect:
         serializedVersion: 2
         x: 512
@@ -177,7 +177,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: GreenHealthBarSpriteSheet_2
+      name: Green_HP_1
       rect:
         serializedVersion: 2
         x: 0
@@ -199,7 +199,7 @@ TextureImporter:
       edges: []
       weights: []
     - serializedVersion: 2
-      name: GreenHealthBarSpriteSheet_3
+      name: Green_HP_0
       rect:
         serializedVersion: 2
         x: 512
@@ -236,10 +236,10 @@ TextureImporter:
       - key: SpriteEditor.SliceSettings
         value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":512.0,"y":512.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
-      GreenHealthBarSpriteSheet_0: 2775133747876339249
-      GreenHealthBarSpriteSheet_1: -4639418327295809259
-      GreenHealthBarSpriteSheet_2: -6793757594417769084
-      GreenHealthBarSpriteSheet_3: 3629892675584539632
+      Green_HP_0: 3629892675584539632
+      Green_HP_1: -6793757594417769084
+      Green_HP_2: -4639418327295809259
+      Green_HP_3: 2775133747876339249
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
