@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using UnityEngine.SceneManagement;
 using UnityEngine;
+using System.Linq;
 
 /// <summary>
 /// ClientManagerUDP - lightweight client networking compatible with the simple ServerUDP protocol:
@@ -43,6 +45,11 @@ public class ClientManagerUDP : MonoBehaviour
     private readonly object playersLock = new object();
 
     private int connectedPlayerCount = 0;
+
+    public int GetLocalId()
+    {
+        return localId;
+    }
 
     void Start()
     {
@@ -188,7 +195,7 @@ public class ClientManagerUDP : MonoBehaviour
             using (var ms = new System.IO.MemoryStream())
             using (var w = new System.IO.BinaryWriter(ms))
             {
-                w.Write((byte)3);
+                w.Write((byte)4);
                 w.Write(id);
                 var data = ms.ToArray();
                 socket.SendTo(data, serverEndPoint);
@@ -288,42 +295,53 @@ public class ClientManagerUDP : MonoBehaviour
                         });
                     }
                     break;
+
                 case 3: // ASTEROID
-                {
-                    float x  = BitConverter.ToSingle(buf, o); o += 4;
-                    float y  = BitConverter.ToSingle(buf, o); o += 4;
-                    float dx = BitConverter.ToSingle(buf, o); o += 4;
-                    float dy = BitConverter.ToSingle(buf, o); o += 4;
-                    float sp = BitConverter.ToSingle(buf, o); o += 4;
-
-                    MainThreadDispatcher.Enqueue(() => 
                     {
-                        NetworkAsteroidClient.Instance.EnqueueSpawn(new NetworkAsteroidClient.SpawnInfo
-                        {
-                            x = x,
-                            y = y,
-                            dirX = dx,
-                            dirY = dy,
-                            speed = sp
-                        });
-                    });
-                }
-                break;
+                        float x = BitConverter.ToSingle(buf, o); o += 4;
+                        float y = BitConverter.ToSingle(buf, o); o += 4;
+                        float dx = BitConverter.ToSingle(buf, o); o += 4;
+                        float dy = BitConverter.ToSingle(buf, o); o += 4;
+                        float sp = BitConverter.ToSingle(buf, o); o += 4;
 
-                case 4: // DELETE
-                    {
-                        int id = BitConverter.ToInt32(buf, o); o += 4;
                         MainThreadDispatcher.Enqueue(() =>
                         {
-                            if (players.ContainsKey(id))
+                            NetworkAsteroidClient.Instance.EnqueueSpawn(new NetworkAsteroidClient.SpawnInfo
                             {
-                                Destroy(players[id].gameObject);
-                                players.Remove(id);
+                                x = x,
+                                y = y,
+                                dirX = dx,
+                                dirY = dy,
+                                speed = sp
+                            });
+                        });
+                    }
+                    break;
+
+                case 4:
+                    {
+                        int id = BitConverter.ToInt32(buf, o); o += 4;
+
+                        MainThreadDispatcher.Enqueue(() =>
+                        {
+
+                            if (players.TryGetValue(id, out var p))
+                            {
+                                if (p.isLocalPlayer)
+                                {
+                                    HardResetNetworking();
+                                    SceneManager.LoadScene("Lose");
+                                }
+                                else
+                                {
+                                    HardResetNetworking();
+                                    SceneManager.LoadScene("Win");
+                                }
                             }
                         });
                     }
                     break;
-              
+
                 default:
                     Debug.LogWarning("[CLIENT] Unknown packet type: " + type);
                     break;
@@ -334,6 +352,71 @@ public class ClientManagerUDP : MonoBehaviour
             Debug.LogWarning("[CLIENT] ParseIncomingPacket error: " + e.Message);
         }
     }
+
+    public void HardResetNetworking()
+    {
+        Debug.Log("[CLIENT] HARD RESET – cleaning all network state");
+
+        try
+        {
+            // Parar el loop de recepción
+            running = false;
+
+            // Intentar un join corto del hilo receptor
+            try { receiveThread?.Join(200); } catch { }
+
+            // Si sigue vivo, intentar abort (último recurso)
+            try { receiveThread?.Abort(); } catch { }
+
+            // Cerrar socket
+            try { socket?.Close(); } catch { }
+            socket = null;
+
+            // Destruir todos los players locales y limpiar diccionario
+            lock (playersLock)
+            {
+                foreach (var kv in players)
+                {
+                    if (kv.Value != null)
+                        Destroy(kv.Value.gameObject);
+                }
+                players.Clear();
+            }
+
+            // Destruir jugador local si existe (por si quedó)
+            if (localPlayer != null)
+            {
+                try { Destroy(localPlayer.gameObject); } catch { }
+                localPlayer = null;
+            }
+
+            // Destruir proyectiles/asteroides que queden en escena
+            var projs = GameObject.FindObjectsOfType<Projectile>();
+            foreach (var p in projs) Destroy(p.gameObject);
+
+            // Si tienes un script Bullet aparte
+            var bullets = GameObject.FindObjectsOfType(typeof(MonoBehaviour))
+                          .Cast<MonoBehaviour>()
+                          .Where(m => m.GetType().Name == "Bullet")
+                          .ToArray();
+            foreach (var b in bullets) Destroy(b.gameObject);
+
+            // También destruye asteroides si persisten (buscar por componente o tag)
+            // Ajusta el tipo "Asteroid" por el script real si existe:
+            var asteroids = GameObject.FindObjectsOfType(typeof(MonoBehaviour))
+                            .Cast<MonoBehaviour>()
+                            .Where(m => m.GetType().Name.ToLower().Contains("asteroid"))
+                            .ToArray();
+            foreach (var a in asteroids) Destroy(a.gameObject);
+
+            Debug.Log("[CLIENT] Hard reset completed.");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[CLIENT] HardResetNetworking failed: " + ex.Message);
+        }
+    }
+
 
     private void SpawnOrUpdatePlayer(int id, string name, Vector2 pos, float rot, Vector2 vel)
     {
@@ -365,19 +448,16 @@ public class ClientManagerUDP : MonoBehaviour
                 p.clientManager = this;
                 p.isLocalPlayer = isLocal;
 
-                // Assign Player1 / Player2 labels (optional)
                 string finalName = (connectedPlayerCount == 1) ? "Player1" : "Player2";
                 p.userName = finalName;
                 if (p.tmp != null)
                     p.tmp.SetText(finalName);
 
-                // Assign proper bullet prefab
                 if (connectedPlayerCount == 1)
                     p.bulletPrefab = bulletPrefab;
                 else if (connectedPlayerCount == 2)
                     p.bulletPrefab = bulletPrefabGreen;
 
-                // Apply initial health encoded in vel.y
                 p.currentHealth = Mathf.Max(0, Mathf.RoundToInt(vel.y));
 
                 players[id] = p;
@@ -390,37 +470,28 @@ public class ClientManagerUDP : MonoBehaviour
             }
         }
 
-        // UPDATE EXISTING REMOTE PLAYER
         if (!isLocal)
         {
             players[id].ApplyNetworkState(pos, rot, vel);
         }
     }
 
-    // ---------------------------
-    // HANDLE INCOMING SHOOT
-    // ---------------------------
     private void HandleIncomingShoot(int shooterId, Vector2 origin, Vector2 direction)
     {
-        // Find shooter (so we can ignore collision with them)
         players.TryGetValue(shooterId, out var shooter);
 
-        // Choose prefab - fallback to default bulletPrefab if necessary
         GameObject prefab = shooter != null ? shooter.bulletPrefab : bulletPrefab;
         if (prefab == null) return;
 
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
         GameObject b = Instantiate(prefab, origin, Quaternion.Euler(0, 0, angle));
 
-        // assign owner on Projectile script
         var proj = b.GetComponent<Projectile>();
         if (proj != null)
             proj.ownerId = shooterId;
 
-        // set velocity
         if (b.TryGetComponent<Rigidbody2D>(out var rb))
         {
-            // ignore collision with shooter on all clients (if shooter exists)
             var bulletCol = b.GetComponent<Collider2D>();
             Collider2D shooterCol = (shooter != null) ? shooter.GetComponent<Collider2D>() : null;
             if (bulletCol != null && shooterCol != null)
@@ -431,7 +502,6 @@ public class ClientManagerUDP : MonoBehaviour
             rb.linearVelocity = direction.normalized * bulletSpeed;
         }
 
-        // fallback: also try to set owner on legacy Bullet script if present
         var bScript = b.GetComponent<Bullet>();
         if (bScript != null)
             bScript.ownerId = shooterId;

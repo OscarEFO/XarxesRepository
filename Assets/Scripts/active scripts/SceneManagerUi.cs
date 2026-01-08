@@ -15,6 +15,12 @@ public class SceneManagerUI : MonoBehaviour
         SceneManager.LoadScene("Client");
     }
 
+    public void BackToMenu()
+    {
+        // Cargar escena del cliente
+        SceneManager.LoadScene("Menu");
+    }
+
     public void QuitGame()
     {
         Application.Quit();
