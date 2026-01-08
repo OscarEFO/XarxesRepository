@@ -452,6 +452,9 @@ MonoBehaviour:
   networkId: -1
   rotationOffset: -90
   bulletPrefab: {fileID: 0}
+  dashForce: 16
+  dashDuration: 0.12
+  dashCooldown: 0.8
 --- !u!114 &1394175213979369686
 MonoBehaviour:
   m_ObjectHideFlags: 0

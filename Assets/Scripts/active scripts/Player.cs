@@ -27,6 +27,14 @@ public class Player : MonoBehaviour
     [Header("Shooting")]
     public GameObject bulletPrefab;   // assigned by client manager on spawn
 
+    [Header("Dash")]
+    public float dashForce = 8f;
+    public float dashDuration = 0.12f;
+    public float dashCooldown = 0.8f;
+
+    private bool isDashing = false;
+    private float lastDashTime = -999f;
+
     private Rigidbody2D rb;
     private Vector2 moveInput;
 
@@ -62,7 +70,11 @@ public class Player : MonoBehaviour
     {
         if (isLocalPlayer)
         {
-            rb.linearVelocity = moveInput * moveSpeed;
+            if (!isDashing)
+            {
+                rb.linearVelocity = moveInput * moveSpeed;
+            }
+
             rb.rotation = desiredAngle;
             return;
         }
@@ -196,8 +208,53 @@ public class Player : MonoBehaviour
 
         if (moveInput.magnitude > 1f)
             moveInput.Normalize();
+        if (kb.spaceKey.wasPressedThisFrame)
+        {
+            TryDash();
+        }
+
     }
 
+    private void TryDash()
+    {
+    if (!isLocalPlayer) return;
+    if (isDashing) return;
+    if (Time.time < lastDashTime + dashCooldown) return;
+
+    // Dash direction = current movement direction
+    Vector2 dashDir = moveInput;
+
+    // If player is standing still, dash forward (rotation)
+    if (dashDir.sqrMagnitude < 0.01f)
+    {
+        float angleRad = (rb.rotation - rotationOffset) * Mathf.Deg2Rad;
+        dashDir = new Vector2(Mathf.Cos(angleRad), Mathf.Sin(angleRad));
+    }
+
+    dashDir.Normalize();
+
+    StartCoroutine(DashCoroutine(dashDir));
+    }
+    
+    private IEnumerator DashCoroutine(Vector2 dir)
+    {
+        isDashing = true;
+        lastDashTime = Time.time;
+
+        Vector2 originalVelocity = rb.linearVelocity;
+
+        rb.linearVelocity = dir * dashForce;
+
+        float t = 0f;
+        while (t < dashDuration)
+        {
+            t += Time.deltaTime;
+            yield return null;
+        }
+
+        rb.linearVelocity = originalVelocity;
+        isDashing = false;
+    }
     private void UpdateRotationFromMouse()
     {
         if (Mouse.current == null || Camera.main == null) return;

@@ -36,9 +36,28 @@ public class ClientManagerUDP : MonoBehaviour
     private Thread receiveThread;
     private volatile bool running = false;
 
+    public bool jitter = true;
+    public bool packetLoss = true;
+    public int minJitt = 0;
+    public int maxJitt = 800;
+    public int lossThreshold = 90;
+
+    private struct Message
+    {
+        public byte[] message;
+        public DateTime time;
+        public IPEndPoint ip;
+    }
+
+    private readonly List<Message> messageBuffer = new List<Message>();
+    private readonly object myLock = new object();
+    private Thread sendThread;
+    private volatile bool exit = false;
+
     // Local player
     public Player localPlayer;
     private int localId;
+
 
     // Remote players
     private readonly Dictionary<int, Player> players = new Dictionary<int, Player>();
@@ -79,9 +98,45 @@ public class ClientManagerUDP : MonoBehaviour
     private void Shutdown()
     {
         running = false;
+        exit = true;
         try { receiveThread?.Join(200); } catch { }
         try { socket?.Close(); } catch { }
-        socket = null;
+        try { socket?.Close(); } catch { }    
+    }
+
+    void sendMessage(byte[] data, IPEndPoint ip)
+    {
+        System.Random r = new System.Random();
+        if (((r.Next(0, 100) > lossThreshold) && packetLoss) || !packetLoss)
+        {
+            Message m = new Message
+            {
+                message = data,
+                time = jitter ? DateTime.Now.AddMilliseconds(r.Next(minJitt, maxJitt)) : DateTime.Now,
+                ip = ip
+            };
+            lock (myLock) messageBuffer.Add(m);
+        }
+    }
+
+    void sendMessages()
+    {
+        while (!exit)
+        {
+            DateTime now = DateTime.Now;
+            lock (myLock)
+            {
+                for (int i = messageBuffer.Count - 1; i >= 0; i--)
+                {
+                    if (messageBuffer[i].time <= now)
+                    {
+                        socket.SendTo(messageBuffer[i].message, messageBuffer[i].ip);
+                        messageBuffer.RemoveAt(i);
+                    }
+                }
+            }
+            Thread.Sleep(1);
+        }
     }
 
     private void SetupSocket()
