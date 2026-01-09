@@ -375,24 +375,19 @@ public class ClientManagerUDP : MonoBehaviour
 
                 case 4:
                     {
-                        int id = BitConverter.ToInt32(buf, o); o += 4;
+                        int deadId = BitConverter.ToInt32(buf, o); o += 4;
 
                         MainThreadDispatcher.Enqueue(() =>
                         {
+                            bool iDied = (deadId == localId);
 
-                            if (players.TryGetValue(id, out var p))
-                            {
-                                if (p.isLocalPlayer)
-                                {
-                                    HardResetNetworking();
-                                    SceneManager.LoadScene("Lose");
-                                }
-                                else
-                                {
-                                    HardResetNetworking();
-                                    SceneManager.LoadScene("Win");
-                                }
-                            }
+                            // Stop networking first
+                            HardResetNetworking();
+
+                            if (iDied)
+                                SceneManager.LoadScene("Lose");
+                            else
+                                SceneManager.LoadScene("Win");
                         });
                     }
                     break;

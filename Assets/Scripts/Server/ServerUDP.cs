@@ -170,16 +170,16 @@ public class ServerUDP : MonoBehaviour
     }
     private void HandleDelete(byte[] buf, ref int o, IPEndPoint ep)
     {
-        int id = BitConverter.ToInt32(buf, o); o += 4;
+        int deadId = BitConverter.ToInt32(buf, o); o += 4;
 
-        if (players.ContainsKey(id))
-        {
-            players.Remove(id);
-            Debug.Log($"[SERVER] DELETE {id}");
-        }
+        Debug.Log($"[SERVER] MATCH END – player {deadId} died");
 
-        BroadcastDelete(id);
+        BroadcastDelete(deadId);
+
+        players.Clear();
+        endpoints.Clear();
     }
+
     private void BroadcastDelete(int id)
     {
         byte[] data = BuildDeletePacket(id);
