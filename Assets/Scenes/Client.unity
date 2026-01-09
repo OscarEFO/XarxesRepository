@@ -156,6 +156,11 @@ MonoBehaviour:
   bulletPrefabRed: {fileID: 356683303254194531, guid: af34cc7026600d544be385446964e27f, type: 3}
   bulletPrefabGreen: {fileID: 356683303254194531, guid: 2dcebfcf9c009ee4ba22641e4866f5da, type: 3}
   bulletSpeed: 15
+  jitter: 1
+  packetLoss: 1
+  minJitt: 0
+  maxJitt: 800
+  lossThreshold: 90
   localPlayer: {fileID: 0}
 --- !u!4 &84535884
 Transform:
@@ -1197,7 +1202,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -0, y: 0, z: 0}
-  m_LocalScale: {x: 17.91427, y: 17.91427, z: 17.91427}
+  m_LocalScale: {x: 25.816261, y: 25.816261, z: 25.816261}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
