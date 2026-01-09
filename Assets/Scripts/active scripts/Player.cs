@@ -44,6 +44,9 @@ public class Player : MonoBehaviour
     private Vector2 targetVelocity;
     private bool hasIncomingNetworkUpdate = false;
 
+    private HealthUIController healthUI;
+
+
     void Start()
     {
         currentHealth = maxHealth;
@@ -54,6 +57,12 @@ public class Player : MonoBehaviour
 
         if (clientManager == null)
             clientManager = FindObjectOfType<ClientManagerUDP>();
+
+        healthUI = FindObjectOfType<HealthUIController>();
+
+        if (healthUI != null)
+        healthUI.UpdateHealth(isLocalPlayer, currentHealth);
+
     }
 
     void Update()
@@ -96,23 +105,20 @@ public class Player : MonoBehaviour
     // -------------------------------
     public void TakeDamage(int amount)
     {
-        currentHealth -= amount;
-        Debug.Log($"{userName} took {amount} dmg → {currentHealth} HP");
+        if (currentHealth <= 0)
+            return;
 
-        // Clamp
+        Debug.Log($"{userName} took {amount} dmg = {currentHealth - amount} HP");
+
+        SetHealth(currentHealth - amount);
+
         if (currentHealth <= 0)
         {
-            currentHealth = 0;
             Die();
             return;
         }
 
-        // Actualizar UI (solo si sigue vivo)
-        HealthUIController ui = FindObjectOfType<HealthUIController>();
-        if (ui != null)
-            ui.UpdateHealth(isLocalPlayer, currentHealth);
-
-        // Enviar update al servidor
+        // Send update to server
         if (clientManager != null)
         {
             clientManager.SendUpdate(
@@ -124,27 +130,20 @@ public class Player : MonoBehaviour
         }
     }
 
+
     public void AddHealth(int amount)
     {
-        // No revivir jugadores muertos
         if (currentHealth <= 0)
             return;
 
         int oldHealth = currentHealth;
-        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+        SetHealth(currentHealth + amount);
 
-        // Si no ha cambiado la vida, no hacemos nada
         if (currentHealth == oldHealth)
             return;
 
         Debug.Log($"{userName} healed +{amount} → {currentHealth} HP");
 
-        // Actualizar UI
-        HealthUIController ui = FindObjectOfType<HealthUIController>();
-        if (ui != null)
-            ui.UpdateHealth(isLocalPlayer, currentHealth);
-
-        // Enviar update al servidor
         if (clientManager != null)
         {
             clientManager.SendUpdate(
@@ -155,6 +154,7 @@ public class Player : MonoBehaviour
             );
         }
     }
+
 
 
     private void Die()
@@ -318,6 +318,14 @@ public class Player : MonoBehaviour
         }
     }
 
+    private void SetHealth(int newHealth)
+    {
+        currentHealth = Mathf.Clamp(newHealth, 0, maxHealth);
+
+        if (healthUI != null && currentHealth > 0)
+            healthUI.UpdateHealth(isLocalPlayer, currentHealth);
+    }
+
     // -------------------------------
     // NETWORK UPDATES
     // -------------------------------
@@ -343,8 +351,9 @@ public class Player : MonoBehaviour
         targetRotation = rot;
         targetVelocity = new Vector2(vel.x, 0);
 
-        // vel.y contains the health value (packed by SendUpdate)
-        currentHealth = Mathf.Max(0, Mathf.RoundToInt(vel.y));
+        int newHealth = Mathf.Max(0, Mathf.RoundToInt(vel.y));
+        if (newHealth != currentHealth)
+            SetHealth(newHealth);
 
         hasIncomingNetworkUpdate = true;
     }
