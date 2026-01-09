@@ -25,7 +25,7 @@ public class Player : MonoBehaviour
     public float rotationOffset = 0f;
 
     [Header("Shooting")]
-    public GameObject bulletPrefab;   // assigned by client manager on spawn
+    public GameObject bulletPrefab;
 
     [Header("Dash")]
     public float dashForce = 8f;
@@ -88,7 +88,6 @@ public class Player : MonoBehaviour
             return;
         }
 
-        // REMOTE PLAYER SMOOTHING
         if (hasIncomingNetworkUpdate)
         {
             transform.position = Vector2.Lerp(transform.position, targetPosition, 0.25f);
@@ -100,9 +99,7 @@ public class Player : MonoBehaviour
         }
     }
 
-    // -------------------------------
-    // HEALTH + DAMAGE
-    // -------------------------------
+
     public void TakeDamage(int amount)
     {
         if (currentHealth <= 0)
@@ -118,7 +115,6 @@ public class Player : MonoBehaviour
             return;
         }
 
-        // Send update to server
         if (clientManager != null)
         {
             clientManager.SendUpdate(
@@ -161,49 +157,38 @@ public class Player : MonoBehaviour
     {
         Debug.Log($"{userName} (id={networkId}) died!");
 
-        // Inform server (server should broadcast delete)
         if (clientManager != null)
         {
             clientManager.SendDelete(networkId);
         }
 
-        // Destroy locally
         Destroy(gameObject);
     }
 
-    // -------------------------------
-    // COLLISION HANDLING (trigger & collision)
-    // -------------------------------
-    // This handler intentionally does not bail out for !isLocalPlayer.
-    // We want ALL clients to detect impacts and update visuals/HP.
+
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (other == null) return;
 
-        // Bullet damage
         if (other.CompareTag("Bullet"))
         {
             var proj = other.GetComponent<Projectile>();
             if (proj != null)
             {
-                // Only get damaged by projectiles that belong to another player
                 if (proj.ownerId != networkId)
                 {
                     TakeDamage(proj.damage);
                 }
             }
 
-            // Destroy bullet (hit confirmed)
             Destroy(other.gameObject);
             return;
         }
 
-        // Asteroid damage
         if (other.CompareTag("Asteroid"))
         {
             TakeDamage(1);
 
-            // Optionally destroy asteroid on hit
             Destroy(other.gameObject);
             return;
         }
@@ -211,7 +196,6 @@ public class Player : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        // just in case colliders aren't triggers - treat similar to trigger version
         var other = collision.collider;
         if (other == null) return;
 
@@ -235,9 +219,7 @@ public class Player : MonoBehaviour
         }
     }
 
-    // -------------------------------
-    // INPUT
-    // -------------------------------
+
     private void HandleInput()
     {
         moveInput = Vector2.zero;
@@ -269,10 +251,8 @@ public class Player : MonoBehaviour
     if (isDashing) return;
     if (Time.time < lastDashTime + dashCooldown) return;
 
-    // Dash direction = current movement direction
     Vector2 dashDir = moveInput;
 
-    // If player is standing still, dash forward (rotation)
     if (dashDir.sqrMagnitude < 0.01f)
     {
         float angleRad = (rb.rotation - rotationOffset) * Mathf.Deg2Rad;
@@ -326,14 +306,11 @@ public class Player : MonoBehaviour
             healthUI.UpdateHealth(isLocalPlayer, currentHealth);
     }
 
-    // -------------------------------
-    // NETWORK UPDATES
-    // -------------------------------
+
     private void SendUpdateToServer()
     {
         if (clientManager == null) return;
 
-        // encode current health in vel.y to reuse existing server packet shape
         clientManager.SendUpdate(
             networkId,
             transform.position,
@@ -342,7 +319,6 @@ public class Player : MonoBehaviour
         );
     }
 
-    // Called by client manager when receiving remote snapshots
     public void ApplyNetworkState(Vector2 pos, float rot, Vector2 vel)
     {
         if (isLocalPlayer) return;

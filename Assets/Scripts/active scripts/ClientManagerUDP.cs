@@ -9,15 +9,7 @@ using System.Linq;
 using Networking.Reliability;
 
 
-/// <summary>
-/// ClientManagerUDP - lightweight client networking compatible with the simple ServerUDP protocol:
-/// Packet layout:
-/// [byte] PacketType
-/// Create(0): [int id][short nameLen][name bytes][float x][float y][float velX][float velY][float rot]
-/// Update(1): [int id][float x][float y][float velX][float velY][float rot]
-/// Shoot (2): [int id][float originX][float originY][float dirX][float dirY]
-/// Delete(3): [int id]
-/// </summary>
+
 public class ClientManagerUDP : MonoBehaviour
 {
     [Header("Connection")]
