@@ -4,6 +4,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using UnityEngine;
+using Networking.Reliability;
+
 
 public class ServerUDP : MonoBehaviour
 {
@@ -43,6 +45,30 @@ public class ServerUDP : MonoBehaviour
 
     private readonly Dictionary<int, PlayerState> players = new Dictionary<int, PlayerState>();
     private readonly Dictionary<string, IPEndPoint> endpoints = new Dictionary<string, IPEndPoint>();
+    private ReliabilityManager reliability = new ReliabilityManager();
+
+    private byte[] WrapReliable(byte packetType, byte[] payload)
+    {
+        ushort seq = reliability.NextSequence();
+        ushort ack = reliability.LastAck;
+
+        byte[] data = new byte[1 + ReliableHeader.Size + payload.Length];
+        int o = 0;
+
+        data[o++] = packetType;
+
+        System.Buffer.BlockCopy(System.BitConverter.GetBytes(seq), 0, data, o, 2);
+        o += 2;
+
+        System.Buffer.BlockCopy(System.BitConverter.GetBytes(ack), 0, data, o, 2);
+        o += 2;
+
+        System.Buffer.BlockCopy(payload, 0, data, o, payload.Length);
+
+        reliability.RegisterSend(seq, data);
+
+        return data;
+    }
 
     void Start()
     {
@@ -135,7 +161,17 @@ public class ServerUDP : MonoBehaviour
     private void ParsePacket(byte[] buf, int len, IPEndPoint ep)
     {
         int o = 0;
+        if (len < 1) return;
+
         byte type = buf[o++];
+
+        if (type == 0 || type == 4) // CREATE or DELETE
+        {
+            ushort seq = BitConverter.ToUInt16(buf, o); o += 2;
+            ushort ack = BitConverter.ToUInt16(buf, o); o += 2;
+
+            reliability.ProcessAck(ack);
+        }
 
         switch (type)
         {
@@ -143,9 +179,9 @@ public class ServerUDP : MonoBehaviour
             case 1: HandleUpdate(buf, ref o, ep); break;
             case 2: HandleShoot(buf, ref o, ep); break;
             case 4: HandleDelete(buf, ref o, ep); break;
-                    
         }
     }
+
 
     private void HandleCreate(byte[] buf, ref int o, IPEndPoint ep)
     {
@@ -185,14 +221,17 @@ public class ServerUDP : MonoBehaviour
         byte[] data = BuildDeletePacket(id);
 
         foreach (var ep in endpoints.Values)
-            socket.SendTo(data, ep);
+            socket.SendTo(
+                WrapReliable(4, BuildDeletePacket(id)),
+                ep
+            );
+
     }
     private byte[] BuildDeletePacket(int id)
     {
         var ms = new System.IO.MemoryStream();
         var w = new System.IO.BinaryWriter(ms);
 
-        w.Write((byte)4); // DELETE
         w.Write(id);
 
         return ms.ToArray();
@@ -234,7 +273,10 @@ public class ServerUDP : MonoBehaviour
     private void BroadcastCreate(PlayerState p)
     {
         foreach (var ep in endpoints.Values)
-            socket.SendTo(BuildCreatePacket(p), ep);
+            socket.SendTo(
+                WrapReliable(0, BuildCreatePacket(p)),
+                ep
+            );
     }
 
     private byte[] BuildCreatePacket(PlayerState p)
@@ -242,7 +284,6 @@ public class ServerUDP : MonoBehaviour
         var ms = new System.IO.MemoryStream();
         var w = new System.IO.BinaryWriter(ms);
 
-        w.Write((byte)0);
         w.Write(p.id);
         WriteString(w, p.name);
         w.Write(p.pos.x);

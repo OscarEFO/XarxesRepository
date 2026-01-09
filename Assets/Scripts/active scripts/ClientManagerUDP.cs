@@ -6,6 +6,8 @@ using System.Threading;
 using UnityEngine.SceneManagement;
 using UnityEngine;
 using System.Linq;
+using Networking.Reliability;
+
 
 /// <summary>
 /// ClientManagerUDP - lightweight client networking compatible with the simple ServerUDP protocol:
@@ -65,6 +67,9 @@ public class ClientManagerUDP : MonoBehaviour
 
     private int connectedPlayerCount = 0;
 
+    private ReliabilityManager reliability = new ReliabilityManager();
+
+
     public int GetLocalId()
     {
         return localId;
@@ -103,6 +108,30 @@ public class ClientManagerUDP : MonoBehaviour
         try { socket?.Close(); } catch { }
         try { socket?.Close(); } catch { }    
     }
+
+    private byte[] WrapReliable(byte packetType, byte[] payload)
+    {
+        ushort seq = reliability.NextSequence();
+        ushort ack = reliability.LastAck;
+
+        byte[] data = new byte[1 + ReliableHeader.Size + payload.Length];
+        int o = 0;
+
+        data[o++] = packetType;
+
+        System.Buffer.BlockCopy(System.BitConverter.GetBytes(seq), 0, data, o, 2);
+        o += 2;
+
+        System.Buffer.BlockCopy(System.BitConverter.GetBytes(ack), 0, data, o, 2);
+        o += 2;
+
+        System.Buffer.BlockCopy(payload, 0, data, o, payload.Length);
+
+        reliability.RegisterSend(seq, data);
+
+        return data;
+    }
+
 
     void sendMessage(byte[] data, IPEndPoint ip)
     {
@@ -173,25 +202,28 @@ public class ClientManagerUDP : MonoBehaviour
             using (var ms = new System.IO.MemoryStream())
             using (var w = new System.IO.BinaryWriter(ms))
             {
-                w.Write((byte)0);
                 w.Write(localId);
                 WriteString(w, userName);
-                w.Write(0f); // pos.x (initial)
+                w.Write(0f); // pos.x
                 w.Write(0f); // pos.y
                 w.Write(0f); // vel.x
                 w.Write(0f); // vel.y (health)
                 w.Write(0f); // rot
 
-                var data = ms.ToArray();
+                var payload = ms.ToArray();
+                var data = WrapReliable(0, payload); 
+
                 socket.SendTo(data, serverEndPoint);
             }
-            Debug.Log($"[CLIENT] Sent CREATE id={localId} name='{userName}'");
+
+            Debug.Log($"[CLIENT] Sent RELIABLE CREATE id={localId}");
         }
         catch (Exception e)
         {
             Debug.LogWarning("[CLIENT] SendCreate failed: " + e.Message);
         }
     }
+
 
     public void SendUpdate(int id, Vector2 pos, float rot, Vector2 vel)
     {
@@ -250,18 +282,22 @@ public class ClientManagerUDP : MonoBehaviour
             using (var ms = new System.IO.MemoryStream())
             using (var w = new System.IO.BinaryWriter(ms))
             {
-                w.Write((byte)4);
                 w.Write(id);
-                var data = ms.ToArray();
+
+                var payload = ms.ToArray();
+                var data = WrapReliable(4, payload); // 4 = DELETE
+
                 socket.SendTo(data, serverEndPoint);
             }
-            Debug.Log($"[CLIENT] Sent DELETE id={id}");
+
+            Debug.Log($"[CLIENT] Sent RELIABLE DELETE id={id}");
         }
         catch (Exception e)
         {
             Debug.LogWarning("[CLIENT] SendDelete failed: " + e.Message);
         }
     }
+
 
     private void ReceiveLoop()
     {
@@ -299,6 +335,15 @@ public class ClientManagerUDP : MonoBehaviour
             int o = 0;
             if (buf.Length < 1) return;
             byte type = buf[o++];
+
+            // Reliable packets only
+            if (type == 0 || type == 4)
+            {
+                ushort seq = BitConverter.ToUInt16(buf, o); o += 2;
+                ushort ack = BitConverter.ToUInt16(buf, o); o += 2;
+
+                reliability.ProcessAck(ack);
+            }
 
             switch (type)
             {
